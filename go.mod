@@ -1,4 +1,4 @@
-module github.com/AlexRoehm/serverbase
+module github.com/AgileExecutives/serverbase
 
 go 1.24
 
