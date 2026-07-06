@@ -4,7 +4,7 @@ import (
     "net/http"
     "time"
 
-    "github.com/ae/serverbase"
+    "github.com/AlexRoehm/serverbase"
     "github.com/gin-gonic/gin"
 )
 
