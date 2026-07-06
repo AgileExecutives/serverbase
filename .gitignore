@@ -1,0 +1,16 @@
+# Go
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# VSCode
+.vscode/
+
+# OS
+.DS_Store
+
+# temp
+tmp/
