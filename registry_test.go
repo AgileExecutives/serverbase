@@ -10,7 +10,7 @@ import (
 type dummyModule struct{ name string }
 
 func (d *dummyModule) Name() string                      { return d.name }
-func (d *dummyModule) RegisterRoutes(_ *gin.RouterGroup) { return }
+func (d *dummyModule) RegisterRoutes(_ *gin.RouterGroup) {}
 func (d *dummyModule) Migrate() error                    { return nil }
 
 func TestModuleRegistry_RegisterAndList(t *testing.T) {
