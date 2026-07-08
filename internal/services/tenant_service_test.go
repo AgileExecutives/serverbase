@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/AgileExecutives/serverbase/internal/models"
+	"github.com/AgileExecutives/serverbase/modules/tenant/repo"
 	"github.com/AgileExecutives/serverbase/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,7 +18,8 @@ func setupTenantTest(t *testing.T) (*TenantService, *gorm.DB) {
 	// Tenant is already migrated by testutils.SetupTestDB
 	// Pass nil for TenantBucketService – tests use CreateTenantWithoutBucket or
 	// verify that the nil-bucket path does not panic.
-	svc := NewTenantService(db, nil)
+	repo := repo.NewGormTenantRepo(db)
+	svc := NewTenantService(repo, nil)
 	return svc, db
 }
 

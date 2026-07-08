@@ -1,10 +1,10 @@
 package eventbus
 
 import (
-"context"
-"fmt"
-"log"
-"sync"
+	"context"
+	"fmt"
+	"log"
+	"sync"
 )
 
 // MemoryEventBus is an in-memory implementation of the EventBus interface
@@ -29,7 +29,7 @@ func NewMemoryEventBus() *MemoryEventBus {
 		asyncChan: make(chan asyncEvent, 1000), // Buffer for async events
 		shutdown:  make(chan struct{}),
 	}
-	
+
 	// Start async event processing goroutine
 	bus.start()
 	return bus
@@ -44,7 +44,7 @@ func (b *MemoryEventBus) start() {
 	}
 	b.running = true
 	b.mu.Unlock()
-	
+
 	b.wg.Add(1)
 	go func() {
 		defer b.wg.Done()
@@ -66,23 +66,23 @@ func (b *MemoryEventBus) Publish(ctx context.Context, event Event) error {
 	b.mu.RLock()
 	handlers, exists := b.handlers[event.GetType()]
 	b.mu.RUnlock()
-	
+
 	if !exists || len(handlers) == 0 {
 		// No handlers registered for this event type
 		return nil
 	}
-	
+
 	var errs []error
 	for _, handler := range handlers {
 		if err := handler.Handle(ctx, event); err != nil {
 			errs = append(errs, fmt.Errorf("handler %s failed: %w", handler.GetName(), err))
 		}
 	}
-	
+
 	if len(errs) > 0 {
 		return fmt.Errorf("event handling errors: %v", errs)
 	}
-	
+
 	return nil
 }
 
@@ -102,27 +102,27 @@ func (b *MemoryEventBus) Subscribe(handler EventHandler) error {
 	if handler == nil {
 		return fmt.Errorf("handler cannot be nil")
 	}
-	
+
 	eventTypes := handler.GetEventTypes()
 	if len(eventTypes) == 0 {
 		return fmt.Errorf("handler must specify at least one event type")
 	}
-	
+
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	
+
 	for _, eventType := range eventTypes {
 		// Check if handler is already subscribed to this event type
 		for _, existingHandler := range b.handlers[eventType] {
 			if existingHandler.GetName() == handler.GetName() {
-				return fmt.Errorf("handler %s already subscribed to event type %s", 
-handler.GetName(), eventType)
+				return fmt.Errorf("handler %s already subscribed to event type %s",
+					handler.GetName(), eventType)
 			}
 		}
-		
+
 		b.handlers[eventType] = append(b.handlers[eventType], handler)
 	}
-	
+
 	return nil
 }
 
@@ -130,7 +130,7 @@ handler.GetName(), eventType)
 func (b *MemoryEventBus) Unsubscribe(handlerName string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	
+
 	removed := false
 	for eventType, handlers := range b.handlers {
 		newHandlers := make([]EventHandler, 0, len(handlers))
@@ -143,11 +143,11 @@ func (b *MemoryEventBus) Unsubscribe(handlerName string) error {
 		}
 		b.handlers[eventType] = newHandlers
 	}
-	
+
 	if !removed {
 		return fmt.Errorf("handler %s not found", handlerName)
 	}
-	
+
 	return nil
 }
 
@@ -155,12 +155,12 @@ func (b *MemoryEventBus) Unsubscribe(handlerName string) error {
 func (b *MemoryEventBus) GetSubscribers(eventType string) []EventHandler {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	
+
 	handlers, exists := b.handlers[eventType]
 	if !exists {
 		return nil
 	}
-	
+
 	// Return a copy to avoid race conditions
 	result := make([]EventHandler, len(handlers))
 	copy(result, handlers)
@@ -176,16 +176,16 @@ func (b *MemoryEventBus) Shutdown(ctx context.Context) error {
 	}
 	b.running = false
 	b.mu.Unlock()
-	
+
 	close(b.shutdown)
-	
+
 	// Wait for async processor to finish with timeout
 	done := make(chan struct{})
 	go func() {
 		b.wg.Wait()
 		close(done)
 	}()
-	
+
 	select {
 	case <-done:
 		return nil

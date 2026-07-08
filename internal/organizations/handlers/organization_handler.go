@@ -176,7 +176,6 @@ func (h *OrganizationHandler) UpdateOrganization(c *gin.Context) {
 	c.JSON(http.StatusOK, baseAPI.SuccessResponse("Organization updated successfully", organization.ToResponse()))
 }
 
-
 // DeleteOrganization handles deleting an organization
 // @Summary Delete an organization
 // @Description Delete an organization by ID

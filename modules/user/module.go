@@ -8,6 +8,7 @@ import (
 	"github.com/AgileExecutives/serverbase/modules/user/events"
 	"github.com/AgileExecutives/serverbase/modules/user/handlers"
 	"github.com/AgileExecutives/serverbase/modules/user/middleware"
+	"github.com/AgileExecutives/serverbase/modules/user/repo"
 	"github.com/AgileExecutives/serverbase/modules/user/services"
 	"github.com/AgileExecutives/serverbase/pkg/core"
 	settingsentities "github.com/AgileExecutives/serverbase/pkg/settings/entities"
@@ -45,8 +46,10 @@ func (m *UserModule) Dependencies() []string {
 func (m *UserModule) Initialize(ctx core.ModuleContext) error {
 	ctx.Logger.Info("Initializing user module...")
 	m.moduleContext = ctx
-	m.authService = services.NewAuthService(ctx.DB, ctx.Logger)
-	m.authHandlers = handlers.NewAuthHandlers(ctx.DB, ctx.Logger)
+	// Wire a GORM-backed user repository and construct the auth service using the repository.
+	userRepo := repo.NewGormUserRepo(ctx.DB)
+	m.authService = services.NewAuthServiceWithRepo(userRepo, ctx.Logger)
+	m.authHandlers = handlers.NewAuthHandlers(ctx.DB, m.authService, ctx.Logger)
 	m.contactHandlers = handlers.NewContactHandlers(ctx.DB, ctx.Logger)
 	m.healthHandlers = handlers.NewHealthHandlers(ctx.DB, ctx.Logger)
 	m.userSettingsHandlers = handlers.NewUserSettingsHandlers(ctx.DB, ctx.Logger)

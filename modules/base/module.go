@@ -55,8 +55,8 @@ func (m *BaseModule) Initialize(ctx core.ModuleContext) error {
 	// Initialize services
 	m.authService = services.NewAuthService(ctx.DB, ctx.Logger)
 
-	// Initialize handlers
-	m.authHandlers = handlers.NewAuthHandlers(ctx.DB, ctx.Logger)
+	// Initialize handlers (pass authService for newer handler constructors)
+	m.authHandlers = handlers.NewAuthHandlers(ctx.DB, m.authService, ctx.Logger)
 	m.contactHandlers = handlers.NewContactHandlers(ctx.DB, ctx.Logger)
 	m.healthHandlers = handlers.NewHealthHandlers(ctx.DB, ctx.Logger)
 	m.userSettingsHandlers = handlers.NewUserSettingsHandlers(ctx.DB, ctx.Logger)

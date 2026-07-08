@@ -89,9 +89,9 @@ func TestTokenizeQuery(t *testing.T) {
 	}{
 		{"hello world", []string{"hello", "world"}},
 		{"  spaces  ", []string{"spaces"}},
-		{"a",         []string{}}, // too short (min=2)
-		{"",          []string{}},
-		{"ab",        []string{"ab"}},
+		{"a", []string{}}, // too short (min=2)
+		{"", []string{}},
+		{"ab", []string{"ab"}},
 		{"one two three", []string{"one", "two", "three"}},
 	}
 	for _, tt := range tests {
@@ -113,12 +113,12 @@ func TestBuildFieldCondition_AllTypes(t *testing.T) {
 		searchType string
 		contains   string
 	}{
-		{"exact",    "= 'john'"},
-		{"prefix",   "LIKE 'john%'"},
+		{"exact", "= 'john'"},
+		{"prefix", "LIKE 'john%'"},
 		{"contains", "LIKE '%john%'"},
 		{"fulltext", "tsvector"},
-		{"fuzzy",    "SIMILAR TO"},
-		{"",         "LIKE '%john%'"}, // default fallback
+		{"fuzzy", "SIMILAR TO"},
+		{"", "LIKE '%john%'"}, // default fallback
 	}
 
 	for _, tt := range tests {

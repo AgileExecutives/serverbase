@@ -17,6 +17,7 @@ import (
 	"github.com/AgileExecutives/serverbase/pkg/config"
 	"github.com/AgileExecutives/serverbase/pkg/core"
 	"github.com/AgileExecutives/serverbase/pkg/database"
+	"github.com/AgileExecutives/serverbase/pkg/repos"
 	pkgServices "github.com/AgileExecutives/serverbase/pkg/services"
 	"github.com/AgileExecutives/serverbase/pkg/startup"
 
@@ -327,7 +328,8 @@ func (app *Application) seedDatabase() error {
 
 	// Create services for tenant bucket management
 	tenantBucketService := pkgServices.NewTenantBucketService(minioStorage)
-	tenantService := internalServices.NewTenantService(app.context.DB, tenantBucketService)
+	rf := repos.NewGormRepoFactory(app.context.DB)
+	tenantService := internalServices.NewTenantService(rf.TenantRepo(), tenantBucketService)
 
 	// Use the enhanced seed function that creates MinIO buckets
 	// Pass the event bus so UserCreated events trigger module event handlers

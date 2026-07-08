@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/AgileExecutives/serverbase/modules/user/handlers"
+	"github.com/AgileExecutives/serverbase/modules/user/repo"
+	"github.com/AgileExecutives/serverbase/modules/user/services"
 	"github.com/AgileExecutives/serverbase/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,7 +26,11 @@ func TestAuthHandler_Login(t *testing.T) {
 
 	// Setup
 	logger := testutils.NewMockLogger()
-	authHandlers := handlers.NewAuthHandlers(db, logger)
+	// Create an auth service backed by the real test DB so handlers that rely on
+	// service behavior can be exercised. This mirrors production wiring.
+	userRepo := repo.NewGormUserRepo(db)
+	authSvc := services.NewAuthServiceWithRepo(userRepo, logger)
+	authHandlers := handlers.NewAuthHandlers(db, authSvc, logger)
 	router := testutils.SetupTestRouter()
 	router.POST("/auth/login", authHandlers.Login)
 

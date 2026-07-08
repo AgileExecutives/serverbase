@@ -6,22 +6,19 @@ import (
 	"log"
 
 	"github.com/AgileExecutives/serverbase/internal/models"
+	"github.com/AgileExecutives/serverbase/modules/tenant/repo"
 	"github.com/AgileExecutives/serverbase/pkg/services"
-	"gorm.io/gorm"
 )
 
 // TenantService handles tenant operations
 type TenantService struct {
-	db                  *gorm.DB
+	repo                repo.TenantRepo
 	tenantBucketService *services.TenantBucketService
 }
 
-// NewTenantService creates a new tenant service
-func NewTenantService(db *gorm.DB, tenantBucketService *services.TenantBucketService) *TenantService {
-	return &TenantService{
-		db:                  db,
-		tenantBucketService: tenantBucketService,
-	}
+// NewTenantService creates a new tenant service using a TenantRepo implementation
+func NewTenantService(r repo.TenantRepo, tenantBucketService *services.TenantBucketService) *TenantService {
+	return &TenantService{repo: r, tenantBucketService: tenantBucketService}
 }
 
 // CreateTenant creates a new tenant and its MinIO bucket
@@ -33,7 +30,7 @@ func (s *TenantService) CreateTenant(ctx context.Context, req models.TenantCreat
 		Slug:       req.Slug,
 	}
 
-	if err := s.db.Create(&tenant).Error; err != nil {
+	if err := s.repo.Save(ctx, &tenant); err != nil {
 		return nil, fmt.Errorf("failed to create tenant: %w", err)
 	}
 
@@ -58,7 +55,7 @@ func (s *TenantService) CreateTenantWithoutBucket(ctx context.Context, req model
 		Slug:       req.Slug,
 	}
 
-	if err := s.db.Create(&tenant).Error; err != nil {
+	if err := s.repo.Save(ctx, &tenant); err != nil {
 		return nil, fmt.Errorf("failed to create tenant: %w", err)
 	}
 
@@ -88,21 +85,17 @@ func (s *TenantService) EnsureTenantBucket(ctx context.Context, tenantID uint) e
 
 // GetTenant retrieves a tenant by ID
 func (s *TenantService) GetTenant(ctx context.Context, tenantID uint) (*models.Tenant, error) {
-	var tenant models.Tenant
-	if err := s.db.First(&tenant, tenantID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("tenant not found")
-		}
+	t, err := s.repo.FindByID(ctx, tenantID)
+	if err != nil {
 		return nil, fmt.Errorf("failed to get tenant: %w", err)
 	}
-	return &tenant, nil
+	if t == nil {
+		return nil, fmt.Errorf("tenant not found")
+	}
+	return t, nil
 }
 
 // GetAllTenants retrieves all tenants
 func (s *TenantService) GetAllTenants(ctx context.Context) ([]models.Tenant, error) {
-	var tenants []models.Tenant
-	if err := s.db.Find(&tenants).Error; err != nil {
-		return nil, fmt.Errorf("failed to get tenants: %w", err)
-	}
-	return tenants, nil
+	return s.repo.List(ctx)
 }

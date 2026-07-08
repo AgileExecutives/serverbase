@@ -9,6 +9,7 @@ import (
 
 	emailServices "github.com/AgileExecutives/serverbase/modules/email/services"
 	basemodels "github.com/AgileExecutives/serverbase/modules/user/models"
+	"github.com/AgileExecutives/serverbase/modules/user/services"
 	"github.com/AgileExecutives/serverbase/pkg/auth"
 	"github.com/AgileExecutives/serverbase/pkg/config"
 	"github.com/AgileExecutives/serverbase/pkg/core"
@@ -23,17 +24,19 @@ import (
 // AuthHandlers provides authentication related handlers
 type AuthHandlers struct {
 	db             *gorm.DB
+	authService    *services.AuthService
 	logger         core.Logger
 	cfg            config.Config
 	moduleRegistry core.ModuleRegistry
 }
 
 // NewAuthHandlers creates new auth handlers
-func NewAuthHandlers(db *gorm.DB, logger core.Logger) *AuthHandlers {
+func NewAuthHandlers(db *gorm.DB, authSvc *services.AuthService, logger core.Logger) *AuthHandlers {
 	return &AuthHandlers{
-		db:     db,
-		logger: logger,
-		cfg:    config.Load(),
+		db:          db,
+		authService: authSvc,
+		logger:      logger,
+		cfg:         config.Load(),
 	}
 }
 
@@ -49,11 +52,12 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("Invalid request", err.Error()))
 		return
 	}
-	var user models.User
-	if err := h.db.Where("username = ? OR email = ?", req.Email, req.Email).First(&user).Error; err != nil {
+	userPtr, err := h.authService.FindByEmail(c.Request.Context(), req.Email)
+	if err != nil || userPtr == nil {
 		c.JSON(http.StatusUnauthorized, models.ErrorResponseFunc("Invalid credentials", "User not found"))
 		return
 	}
+	user := *userPtr
 	if !user.Active {
 		c.JSON(http.StatusUnauthorized, models.ErrorResponseFunc("Account disabled", "User account is not active"))
 		return
@@ -94,15 +98,16 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("Invalid password", err.Error()))
 		return
 	}
-	var existingUser models.User
-	if err := h.db.Where("username = ? OR email = ?", req.Username, req.Email).First(&existingUser).Error; err == nil {
+	existingUserPtr, _ := h.authService.FindByEmail(c.Request.Context(), req.Email)
+	if existingUserPtr != nil {
+		existingUser := *existingUserPtr
 		// For the test harness and to avoid flakiness when tests re-register the same
 		// user, update the existing user's password to the requested password and
 		// return a login token. This keeps behavior idempotent for repeated runs.
 		if hashedPassword, herr := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost); herr == nil {
 			existingUser.PasswordHash = string(hashedPassword)
 			existingUser.Active = true
-			_ = h.db.Save(&existingUser)
+			_ = h.authService.SaveUser(c.Request.Context(), &existingUser)
 		}
 		token, gerr := auth.GenerateJWT(existingUser.ID, existingUser.TenantID, existingUser.Role)
 		if gerr != nil {
@@ -191,7 +196,7 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 		EmailVerified:   emailVerified,
 		EmailVerifiedAt: emailVerifiedAt,
 	}
-	if err := h.db.Create(&user).Error; err != nil {
+	if err := h.authService.SaveUser(c.Request.Context(), &user); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to create user", err.Error()))
 		return
 	}

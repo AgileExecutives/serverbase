@@ -97,7 +97,7 @@ func (h *FuzzySearchHandler) Search(c *gin.Context) {
 		Offset:              req.Offset,
 		Limit:               req.Limit,
 		UserID:              userID,
-		TenantID:      organizationID,
+		TenantID:            organizationID,
 		IncludeCount:        req.IncludeCount,
 		IncludeAggregations: req.IncludeAggregations,
 		HighlightFields:     req.HighlightFields,
@@ -161,12 +161,12 @@ func (h *FuzzySearchHandler) QuickSearch(c *gin.Context) {
 
 	// Build search options
 	searchOptions := services.SearchOptions{
-		Query:          query,
-		EntityTypes:    entityTypes,
-		Offset:         offset,
-		Limit:          limit,
-		UserID:         userID,
-		TenantID: organizationID,
+		Query:       query,
+		EntityTypes: entityTypes,
+		Offset:      offset,
+		Limit:       limit,
+		UserID:      userID,
+		TenantID:    organizationID,
 	}
 
 	// Perform search
@@ -235,7 +235,7 @@ func (h *FuzzySearchHandler) SearchInEntity(c *gin.Context) {
 		Offset:              req.Offset,
 		Limit:               req.Limit,
 		UserID:              userID,
-		TenantID:      organizationID,
+		TenantID:            organizationID,
 		IncludeCount:        req.IncludeCount,
 		IncludeAggregations: req.IncludeAggregations,
 		HighlightFields:     req.HighlightFields,

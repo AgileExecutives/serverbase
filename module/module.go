@@ -7,6 +7,8 @@ import (
 	"gorm.io/gorm"
 )
 
+// Note: legacy module API (core.Module adapters) follows below.
+
 // Registry is a minimal surface exposed to modules so they can register routes
 // and access basic platform services. Expand as needed.
 type Registry interface {
