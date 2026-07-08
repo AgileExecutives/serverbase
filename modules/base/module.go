@@ -7,13 +7,16 @@ package base
 import (
 	"context"
 
+	internalTenantSvc "github.com/AgileExecutives/serverbase/internal/services"
 	basedocs "github.com/AgileExecutives/serverbase/modules/base/docs"
+	baseServices "github.com/AgileExecutives/serverbase/modules/base/services"
 	"github.com/AgileExecutives/serverbase/modules/user/entities"
 	"github.com/AgileExecutives/serverbase/modules/user/events"
 	"github.com/AgileExecutives/serverbase/modules/user/handlers"
 	"github.com/AgileExecutives/serverbase/modules/user/middleware"
 	"github.com/AgileExecutives/serverbase/modules/user/services"
 	"github.com/AgileExecutives/serverbase/pkg/core"
+	"github.com/AgileExecutives/serverbase/pkg/repos"
 	settingsentities "github.com/AgileExecutives/serverbase/pkg/settings/entities"
 )
 
@@ -23,7 +26,9 @@ type BaseModule struct {
 	contactHandlers      *handlers.ContactHandlers
 	healthHandlers       *handlers.HealthHandlers
 	userSettingsHandlers *handlers.UserSettingsHandlers
+	userSettingsService  *baseServices.UserSettingsService
 	authService          *services.AuthService
+	contactService       *services.ContactService
 	eventHandlers        *events.BaseEventHandlers
 	authMiddleware       *middleware.AuthMiddleware
 	moduleContext        core.ModuleContext
@@ -55,17 +60,27 @@ func (m *BaseModule) Initialize(ctx core.ModuleContext) error {
 	// Initialize services
 	m.authService = services.NewAuthService(ctx.DB, ctx.Logger)
 
+	// Create tenant service and wire into auth service so tenant creation
+	// side-effects (buckets, etc.) are centralized.
+	rf := repos.NewGormRepoFactory(ctx.DB)
+	tenantSvc := internalTenantSvc.NewTenantService(rf.TenantRepo(), nil)
+	m.authService.SetTenantService(tenantSvc)
+
 	// Initialize handlers (pass authService for newer handler constructors)
-	m.authHandlers = handlers.NewAuthHandlers(ctx.DB, m.authService, ctx.Logger)
-	m.contactHandlers = handlers.NewContactHandlers(ctx.DB, ctx.Logger)
-	m.healthHandlers = handlers.NewHealthHandlers(ctx.DB, ctx.Logger)
-	m.userSettingsHandlers = handlers.NewUserSettingsHandlers(ctx.DB, ctx.Logger)
+	m.authHandlers = handlers.NewAuthHandlers(ctx, m.authService, ctx.Logger)
+	contactRepo := rf.ContactRepo()
+	m.contactService = services.NewContactServiceWithRepo(contactRepo, ctx.Logger)
+	m.contactHandlers = handlers.NewContactHandlers(ctx, m.contactService, ctx.Logger)
+	m.healthHandlers = handlers.NewHealthHandlers(ctx, ctx.Logger)
+	// Wire user settings service + handlers
+	m.userSettingsService = baseServices.NewUserSettingsService(ctx.DB)
+	m.userSettingsHandlers = handlers.NewUserSettingsHandlers(ctx, ctx.Logger)
 
 	// Initialize event handlers
 	m.eventHandlers = events.NewBaseEventHandlers(ctx.EventBus, ctx.Logger)
 
 	// Initialize middleware
-	m.authMiddleware = middleware.NewAuthMiddleware(ctx.DB, ctx.Logger)
+	m.authMiddleware = middleware.NewAuthMiddleware(ctx, ctx.Logger)
 
 	// Register pre-generated swagger docs so they appear in the combined spec.
 	if ctx.DocRegistry != nil {
@@ -126,6 +141,7 @@ func (m *BaseModule) EventHandlers() []core.EventHandler {
 func (m *BaseModule) Services() []core.ServiceProvider {
 	return []core.ServiceProvider{
 		services.NewAuthServiceProvider(m.authService),
+		services.NewContactServiceProvider(m.contactService),
 	}
 }
 

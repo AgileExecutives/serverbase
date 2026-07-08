@@ -33,5 +33,15 @@ func (r *GormUserRepo) Save(ctx context.Context, u *models.User) error {
 	return r.db.Save(u).Error
 }
 
+func (r *GormUserRepo) SaveNewsletter(ctx context.Context, n *models.Newsletter) error {
+	return r.db.Create(n).Error
+}
+
+func (r *GormUserRepo) SaveTokenBlacklist(ctx context.Context, tb *models.TokenBlacklist) error {
+	return r.db.Create(tb).Error
+}
+
 // Ensure interface compliance
 var _ UserRepo = (*GormUserRepo)(nil)
+var _ NewsletterRepo = (*GormUserRepo)(nil)
+var _ TokenBlacklistRepo = (*GormUserRepo)(nil)

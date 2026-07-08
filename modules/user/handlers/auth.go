@@ -8,13 +8,13 @@ import (
 	"time"
 
 	emailServices "github.com/AgileExecutives/serverbase/modules/email/services"
-	basemodels "github.com/AgileExecutives/serverbase/modules/user/models"
+	// basemodels no longer used here; use internal models for newsletter
+	"github.com/AgileExecutives/serverbase/internal/models"
 	"github.com/AgileExecutives/serverbase/modules/user/services"
 	"github.com/AgileExecutives/serverbase/pkg/auth"
 	"github.com/AgileExecutives/serverbase/pkg/config"
 	"github.com/AgileExecutives/serverbase/pkg/core"
 	"github.com/AgileExecutives/serverbase/pkg/eventbus"
-	"github.com/AgileExecutives/serverbase/pkg/models"
 	"github.com/AgileExecutives/serverbase/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -30,10 +30,10 @@ type AuthHandlers struct {
 	moduleRegistry core.ModuleRegistry
 }
 
-// NewAuthHandlers creates new auth handlers
-func NewAuthHandlers(db *gorm.DB, authSvc *services.AuthService, logger core.Logger) *AuthHandlers {
+// NewAuthHandlers creates new auth handlers using ModuleContext (avoids passing *gorm.DB directly)
+func NewAuthHandlers(ctx core.ModuleContext, authSvc *services.AuthService, logger core.Logger) *AuthHandlers {
 	return &AuthHandlers{
-		db:          db,
+		db:          ctx.DB,
 		authService: authSvc,
 		logger:      logger,
 		cfg:         config.Load(),
@@ -123,8 +123,8 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 	if authHeader != "" && len(authHeader) > 7 && authHeader[:7] == "Bearer " {
 		signupToken := authHeader[7:]
 		if signupTenantID, err := auth.ValidateUserSignupToken(signupToken); err == nil {
-			var tenant models.Tenant
-			if err := h.db.First(&tenant, signupTenantID).Error; err != nil {
+			tenant, terr := h.authService.FindTenantByID(c.Request.Context(), signupTenantID)
+			if terr != nil || tenant == nil {
 				c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("Tenant not found", "Signup token references invalid tenant"))
 				return
 			}
@@ -146,24 +146,19 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 		}
 	}
 	if tenantID == 0 {
-		var existingTenant models.Tenant
-		if err := h.db.Where("name = ?", req.CompanyName).First(&existingTenant).Error; err == nil {
+		existingTenant, eterr := h.authService.FindTenantByName(c.Request.Context(), req.CompanyName)
+		if eterr == nil && existingTenant != nil {
 			c.JSON(http.StatusConflict, models.ErrorResponseFunc("Company already exists", "A company with this name already exists"))
 			return
 		}
 		slug := utils.GenerateSlug(req.CompanyName)
 		var existingSlugs []string
-		var tenants []models.Tenant
-		h.db.Select("slug").Find(&tenants)
-		for _, t := range tenants {
-			existingSlugs = append(existingSlugs, t.Slug)
+		if slugs, serr := h.authService.ListTenantSlugs(c.Request.Context()); serr == nil {
+			existingSlugs = slugs
 		}
 		slug = utils.EnsureUniqueSlug(slug, existingSlugs)
-		tenant := models.Tenant{
-			Name: req.CompanyName,
-			Slug: slug,
-		}
-		if err := h.db.Create(&tenant).Error; err != nil {
+		tenant := models.Tenant{Name: req.CompanyName, Slug: slug}
+		if err := h.authService.CreateTenant(c.Request.Context(), &tenant); err != nil {
 			log.Printf("❌ Register: Failed to create tenant: %v", err)
 			c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to create tenant", err.Error()))
 			return
@@ -204,38 +199,38 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 	tenantIDStr := strconv.FormatUint(uint64(user.TenantID), 10)
 	eventbus.PublishUserCreatedAsync(c.Request.Context(), userIDStr, user.Email, tenantIDStr)
 	if req.NewsletterOptIn {
-		newsletter := basemodels.Newsletter{
+		newsletter := models.Newsletter{
 			Name:     req.FirstName + " " + req.LastName,
 			Email:    req.Email,
 			Interest: "general",
 			Source:   "registration",
 		}
-		if err := h.db.Create(&newsletter).Error; err != nil {
+
+		if err := h.authService.SaveNewsletter(c.Request.Context(), &newsletter); err != nil {
 			log.Printf("⚠️ Register: Failed to create newsletter subscription: %v (continuing anyway)", err)
 		} else {
 			log.Printf("✅ Newsletter subscription created for %s", req.Email)
 		}
 	}
-	if h.cfg.Email.RequireEmailVerification {
-		verificationToken, err := auth.GenerateVerificationToken(user.Email, user.ID)
-		if err != nil {
-			log.Printf("❌ Register: Failed to generate verification token: %v", err)
-			c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to generate verification token", err.Error()))
-			return
-		}
-		frontendURL := os.Getenv("FRONTEND_URL")
-		if frontendURL == "" {
-			frontendURL = "http://localhost:5173"
-		}
-		verificationURL := frontendURL + "/verify-email?token=" + verificationToken
-		emailService := emailServices.NewEmailService()
-		err = emailService.SendVerificationEmail(user.Email, user.FirstName, verificationURL)
-		if err != nil {
-			log.Printf("⚠️ Register: Failed to send verification email: %v (continuing anyway)", err)
-		} else {
-			log.Printf("✅ Sent verification email to %s (tenant %d)", user.Email, user.TenantID)
-		}
+	verificationToken, err := auth.GenerateVerificationToken(user.Email, user.ID)
+	if err != nil {
+		log.Printf("❌ Register: Failed to generate verification token: %v", err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to generate verification token", err.Error()))
+		return
 	}
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:5173"
+	}
+	verificationURL := frontendURL + "/verify-email?token=" + verificationToken
+	emailService := emailServices.NewEmailService()
+	err = emailService.SendVerificationEmail(user.Email, user.FirstName, verificationURL)
+	if err != nil {
+		log.Printf("⚠️ Register: Failed to send verification email: %v (continuing anyway)", err)
+	} else {
+		log.Printf("✅ Sent verification email to %s (tenant %d)", user.Email, user.TenantID)
+	}
+
 	onboardingToken, err := auth.GenerateOnboardingToken(user.ID, user.TenantID, user.Role)
 	if err != nil {
 		log.Printf("❌ Register: Failed to generate onboarding token: %v", err)
@@ -307,13 +302,8 @@ func (h *AuthHandlers) Logout(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("Invalid token", err.Error()))
 		return
 	}
-	blacklistEntry := models.TokenBlacklist{
-		TokenID:   tokenID,
-		UserID:    user.ID,
-		ExpiresAt: expiresAt,
-		Reason:    "User logout",
-	}
-	if err := h.db.Create(&blacklistEntry).Error; err != nil {
+	blacklistEntry := models.TokenBlacklist{TokenID: tokenID, UserID: user.ID, ExpiresAt: expiresAt, Reason: "User logout"}
+	if err := h.authService.BlacklistToken(c.Request.Context(), &blacklistEntry); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to logout", err.Error()))
 		return
 	}

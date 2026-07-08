@@ -1,28 +1,29 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
 	emailServices "github.com/AgileExecutives/serverbase/modules/email/services"
 	basemodels "github.com/AgileExecutives/serverbase/modules/user/models"
+	"github.com/AgileExecutives/serverbase/modules/user/services"
 	"github.com/AgileExecutives/serverbase/pkg/core"
 	"github.com/AgileExecutives/serverbase/pkg/models"
 	"github.com/AgileExecutives/serverbase/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type ContactHandlers struct {
-	db           *gorm.DB
+	svc          *services.ContactService
 	logger       core.Logger
 	emailService *emailServices.EmailService
 }
 
-func NewContactHandlers(db *gorm.DB, logger core.Logger) *ContactHandlers {
+func NewContactHandlers(ctx core.ModuleContext, svc *services.ContactService, logger core.Logger) *ContactHandlers {
 	return &ContactHandlers{
-		db:           db,
+		svc:          svc,
 		logger:       logger,
 		emailService: emailServices.NewEmailService(),
 	}
@@ -31,24 +32,14 @@ func NewContactHandlers(db *gorm.DB, logger core.Logger) *ContactHandlers {
 func (h *ContactHandlers) GetContacts(c *gin.Context) {
 	page, limit := utils.GetPaginationParams(c)
 	offset := utils.GetOffset(page, limit)
-	var contacts []models.Contact
-	var total int64
-	query := h.db.Model(&models.Contact{})
+	var activePtr *bool
 	if activeStr := c.Query("active"); activeStr != "" {
-		if activeStr == "true" {
-			query = query.Where("active = ?", true)
-		} else if activeStr == "false" {
-			query = query.Where("active = ?", false)
-		}
+		v := activeStr == "true"
+		activePtr = &v
 	}
-	if contactType := c.Query("type"); contactType != "" {
-		query = query.Where("type = ?", contactType)
-	}
-	if err := query.Count(&total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to count contacts", err.Error()))
-		return
-	}
-	if err := query.Offset(offset).Limit(limit).Order("created_at DESC").Find(&contacts).Error; err != nil {
+	contactType := c.Query("type")
+	contacts, total, err := h.svc.ListContacts(c.Request.Context(), offset, limit, activePtr, contactType)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to retrieve contacts", err.Error()))
 		return
 	}
@@ -74,9 +65,9 @@ func (h *ContactHandlers) GetContact(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("Invalid contact ID", err.Error()))
 		return
 	}
-	var contact models.Contact
-	if err := h.db.First(&contact, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	contact, err := h.svc.GetContact(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, models.ErrorResponseFunc("Contact not found", "Contact with specified ID does not exist"))
 			return
 		}
@@ -110,7 +101,7 @@ func (h *ContactHandlers) CreateContact(c *gin.Context) {
 		Notes:     req.Notes,
 		Active:    true,
 	}
-	if err := h.db.Create(&contact).Error; err != nil {
+	if err := h.svc.CreateContact(c.Request.Context(), &contact); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to create contact", err.Error()))
 		return
 	}
@@ -128,9 +119,9 @@ func (h *ContactHandlers) UpdateContact(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("Invalid request", err.Error()))
 		return
 	}
-	var contact models.Contact
-	if err := h.db.First(&contact, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	contact, err := h.svc.GetContact(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, models.ErrorResponseFunc("Contact not found", "Contact with specified ID does not exist"))
 			return
 		}
@@ -173,7 +164,7 @@ func (h *ContactHandlers) UpdateContact(c *gin.Context) {
 	if req.Active != nil {
 		contact.Active = *req.Active
 	}
-	if err := h.db.Save(&contact).Error; err != nil {
+	if err := h.svc.UpdateContact(c.Request.Context(), contact); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to update contact", err.Error()))
 		return
 	}
@@ -186,16 +177,16 @@ func (h *ContactHandlers) DeleteContact(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("Invalid contact ID", err.Error()))
 		return
 	}
-	var contact models.Contact
-	if err := h.db.First(&contact, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	contact, err := h.svc.GetContact(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, models.ErrorResponseFunc("Contact not found", "Contact with specified ID does not exist"))
 			return
 		}
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to retrieve contact", err.Error()))
 		return
 	}
-	if err := h.db.Delete(&contact).Error; err != nil {
+	if err := h.svc.DeleteContact(c.Request.Context(), contact); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to delete contact", err.Error()))
 		return
 	}
@@ -219,45 +210,27 @@ func (h *ContactHandlers) SubmitContactForm(c *gin.Context) {
 	response := models.ContactFormResponse{Message: "Contact form submitted successfully"}
 	if req.Newsletter {
 		newsletter := basemodels.Newsletter{Name: req.Name, Email: req.Email, Interest: req.Subject, Source: req.Source, LastContact: time.Now()}
-		res := h.db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "email"}}, DoUpdates: clause.AssignmentColumns([]string{"name", "interest", "source", "last_contact"})}).Create(&newsletter)
-		if res.Error != nil {
-			h.logger.Warn("newsletter upsert failed", res.Error)
-			var existing basemodels.Newsletter
-			if r := h.db.Where("email = ?", req.Email).First(&existing); r.Error == nil {
-				existing.Name = req.Name
-				existing.Interest = req.Subject
-				existing.Source = req.Source
-				existing.LastContact = time.Now()
-				if err2 := h.db.Save(&existing).Error; err2 == nil {
-					response.NewsletterAdded = true
-					response.NewsletterMessage = "Newsletter subscription updated"
-					h.logger.Info("newsletter updated via fallback", "email", existing.Email)
-				} else {
-					response.NewsletterAdded = false
-					response.NewsletterMessage = "Contact form sent, but newsletter update failed"
-					h.logger.Error("newsletter fallback update failed", err2)
-				}
-			} else {
-				response.NewsletterAdded = false
-				response.NewsletterMessage = "Contact form sent, but newsletter subscription failed"
-				h.logger.Warn("newsletter fallback: not found", "email", req.Email, "err", r.Error)
-			}
-		} else {
+		ok, nerr := h.svc.UpsertNewsletter(c.Request.Context(), &newsletter)
+		if nerr != nil {
+			h.logger.Warn("newsletter upsert failed", nerr)
+			response.NewsletterAdded = false
+			response.NewsletterMessage = "Contact form sent, but newsletter subscription failed"
+		} else if ok {
 			response.NewsletterAdded = true
 			response.NewsletterMessage = "Successfully subscribed to newsletter"
-			h.logger.Info("newsletter upsert succeeded", "email", newsletter.Email, "rows", res.RowsAffected)
+			h.logger.Info("newsletter upsert succeeded", "email", newsletter.Email)
 		}
 	}
 	c.JSON(http.StatusOK, response)
 }
 
 func (h *ContactHandlers) GetNewsletterSubscriptions(c *gin.Context) {
-	var newsletters []basemodels.Newsletter
-	if err := h.db.Find(&newsletters).Error; err != nil {
+	list, err := h.svc.ListNewsletters(c.Request.Context())
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch newsletter subscriptions"})
 		return
 	}
-	c.JSON(http.StatusOK, newsletters)
+	c.JSON(http.StatusOK, list)
 }
 
 func (h *ContactHandlers) UnsubscribeFromNewsletter(c *gin.Context) {
@@ -268,12 +241,12 @@ func (h *ContactHandlers) UnsubscribeFromNewsletter(c *gin.Context) {
 	}
 	// Unscoped so the row is hard-deleted; soft-deleted rows are not re-subscribable
 	// via the OnConflict upsert path (no unique index on email in SQLite).
-	result := h.db.Unscoped().Where("email = ?", email).Delete(&basemodels.Newsletter{})
-	if result.Error != nil {
+	rows, err := h.svc.DeleteNewsletterByEmail(c.Request.Context(), email)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unsubscribe from newsletter"})
 		return
 	}
-	if result.RowsAffected == 0 {
+	if rows == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Email not found in newsletter subscriptions"})
 		return
 	}

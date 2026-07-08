@@ -40,10 +40,18 @@ func (r *FakeUserRepo) Save(ctx context.Context, u *models.User) error {
 	return nil
 }
 
+func (r *FakeUserRepo) SaveNewsletter(ctx context.Context, n *models.Newsletter) error {
+	return nil
+}
+
+func (r *FakeUserRepo) SaveTokenBlacklist(ctx context.Context, tb *models.TokenBlacklist) error {
+	return nil
+}
+
 func TestAuthService_FindByEmailAndSave(t *testing.T) {
 	logger := testutils.NewMockLogger()
 	repo := NewFakeUserRepo()
-	svc := NewAuthServiceWithRepo(repo, logger)
+	svc := NewAuthServiceWithRepo(repo, nil, nil, nil, logger)
 	ctx := context.Background()
 
 	// missing user returns nil

@@ -20,3 +20,12 @@ func (f *GormRepoFactory) TenantRepo() tenantrepo.TenantRepo {
 }
 func (f *GormRepoFactory) CustomerRepo() repo.CustomerRepo { return repo.NewGormCustomerRepo(f.db) }
 func (f *GormRepoFactory) UserRepo() userrepo.UserRepo     { return userrepo.NewGormUserRepo(f.db) }
+func (f *GormRepoFactory) ContactRepo() userrepo.ContactRepo {
+	return userrepo.NewGormContactRepo(f.db)
+}
+func (f *GormRepoFactory) NewsletterRepo() userrepo.NewsletterRepo {
+	return userrepo.NewGormUserRepo(f.db)
+}
+func (f *GormRepoFactory) TokenBlacklistRepo() userrepo.TokenBlacklistRepo {
+	return userrepo.NewGormUserRepo(f.db)
+}

@@ -18,3 +18,13 @@ type UserRepo interface {
 	// Save persists the user entity (create or update).
 	Save(ctx context.Context, u *models.User) error
 }
+
+// NewsletterRepo persists newsletter subscriptions.
+type NewsletterRepo interface {
+	SaveNewsletter(ctx context.Context, n *models.Newsletter) error
+}
+
+// TokenBlacklistRepo persists token blacklist entries used for logout.
+type TokenBlacklistRepo interface {
+	SaveTokenBlacklist(ctx context.Context, tb *models.TokenBlacklist) error
+}

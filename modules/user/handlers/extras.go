@@ -18,8 +18,8 @@ type HealthHandlers struct {
 	logger core.Logger
 }
 
-func NewHealthHandlers(db *gorm.DB, logger core.Logger) *HealthHandlers {
-	return &HealthHandlers{db: db, logger: logger}
+func NewHealthHandlers(ctx core.ModuleContext, logger core.Logger) *HealthHandlers {
+	return &HealthHandlers{db: ctx.DB, logger: logger}
 }
 
 // getEnvAsBool gets environment variable as boolean with fallback to default value
@@ -75,8 +75,8 @@ type UserSettingsHandlers struct {
 	logger core.Logger
 }
 
-func NewUserSettingsHandlers(db *gorm.DB, logger core.Logger) *UserSettingsHandlers {
-	return &UserSettingsHandlers{db: db, logger: logger}
+func NewUserSettingsHandlers(ctx core.ModuleContext, logger core.Logger) *UserSettingsHandlers {
+	return &UserSettingsHandlers{db: ctx.DB, logger: logger}
 }
 
 func (h *UserSettingsHandlers) GetUserSettings(c *gin.Context) {

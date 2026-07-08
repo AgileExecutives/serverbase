@@ -18,10 +18,10 @@ type HealthHandlers struct {
 	logger core.Logger
 }
 
-// NewHealthHandlers creates new health handlers
-func NewHealthHandlers(db *gorm.DB, logger core.Logger) *HealthHandlers {
+// NewHealthHandlers creates new health handlers using ModuleContext
+func NewHealthHandlers(ctx core.ModuleContext, logger core.Logger) *HealthHandlers {
 	return &HealthHandlers{
-		db:     db,
+		db:     ctx.DB,
 		logger: logger,
 	}
 }

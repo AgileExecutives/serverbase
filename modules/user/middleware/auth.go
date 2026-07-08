@@ -12,8 +12,8 @@ type AuthMiddleware struct {
 	logger core.Logger
 }
 
-func NewAuthMiddleware(db *gorm.DB, logger core.Logger) *AuthMiddleware {
-	return &AuthMiddleware{db: db, logger: logger}
+func NewAuthMiddleware(ctx core.ModuleContext, logger core.Logger) *AuthMiddleware {
+	return &AuthMiddleware{db: ctx.DB, logger: logger}
 }
 
 type AuthMiddlewareProvider struct{ mw *AuthMiddleware }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/AgileExecutives/serverbase/modules/user/repo"
 	"github.com/AgileExecutives/serverbase/modules/user/services"
+	"github.com/AgileExecutives/serverbase/pkg/core"
 	"github.com/AgileExecutives/serverbase/pkg/models"
 	"github.com/AgileExecutives/serverbase/pkg/testutils"
 	"github.com/stretchr/testify/require"
@@ -16,7 +17,7 @@ func TestLogin_WithInMemoryRepo(t *testing.T) {
 	// Prepare fake repo and service
 	fake := repo.NewInMemoryUserRepo()
 	logger := testutils.NewMockLogger()
-	authSvc := services.NewAuthServiceWithRepo(fake, logger)
+	authSvc := services.NewAuthServiceWithRepo(fake, nil, fake, fake, logger)
 
 	// create user in fake repo
 	password := "Secret123!"
@@ -25,7 +26,8 @@ func TestLogin_WithInMemoryRepo(t *testing.T) {
 	_ = fake.Save(nil, u)
 
 	// create handler with nil DB (login does not require DB access)
-	h := NewAuthHandlers(nil, authSvc, logger)
+	ctx := core.ModuleContext{DB: nil, Logger: logger}
+	h := NewAuthHandlers(ctx, authSvc, logger)
 	router := testutils.SetupTestRouter()
 	router.POST("/auth/login", h.Login)
 
@@ -40,7 +42,7 @@ func TestRegister_ExistingUser_Path_UsesAuthService(t *testing.T) {
 
 	fake := repo.NewInMemoryUserRepo()
 	logger := testutils.NewMockLogger()
-	authSvc := services.NewAuthServiceWithRepo(fake, logger)
+	authSvc := services.NewAuthServiceWithRepo(fake, nil, fake, fake, logger)
 
 	// existing user
 	oldPass := "OldPass123!"
@@ -48,7 +50,8 @@ func TestRegister_ExistingUser_Path_UsesAuthService(t *testing.T) {
 	u := &models.User{Email: "exist@example.com", PasswordHash: string(hashed), Active: true, EmailVerified: true}
 	_ = fake.Save(nil, u)
 
-	h := NewAuthHandlers(nil, authSvc, logger)
+	ctx := core.ModuleContext{DB: nil, Logger: logger}
+	h := NewAuthHandlers(ctx, authSvc, logger)
 	router := testutils.SetupTestRouter()
 	router.POST("/auth/register", h.Register)
 

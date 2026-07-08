@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/AgileExecutives/serverbase/modules/email/services"
+	"github.com/AgileExecutives/serverbase/pkg/config"
 	"github.com/AgileExecutives/serverbase/pkg/core"
 	"github.com/AgileExecutives/serverbase/pkg/middleware"
 	"github.com/AgileExecutives/serverbase/pkg/models"
@@ -90,8 +91,30 @@ func (h *EmailHandler) GetEmail(c *gin.Context) {
 func (h *EmailHandler) SendEmail(c *gin.Context) {
 	var req models.EmailSendRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("Invalid request", err.Error()))
-		return
+		// Try alternative payload shape used by hurl tests (to_email / from_email)
+		var alt struct {
+			ToEmail   string `json:"to_email"`
+			FromEmail string `json:"from_email"`
+			Subject   string `json:"subject"`
+			Body      string `json:"body"`
+			HTMLBody  string `json:"html_body"`
+		}
+		if err2 := c.ShouldBindJSON(&alt); err2 != nil {
+			c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("Invalid request", err.Error()))
+			return
+		}
+		req.To = alt.ToEmail
+		req.From = alt.FromEmail
+		req.Subject = alt.Subject
+		req.Body = alt.Body
+		req.HTMLBody = alt.HTMLBody
+	}
+
+	// Fill defaults if optional fields missing
+	if req.From == "" {
+		// Use configured default from address
+		cfg := config.Load()
+		req.From = cfg.Email.FromEmail
 	}
 
 	email := models.Email{To: req.To, From: req.From, Subject: req.Subject, Body: req.Body, HTMLBody: req.HTMLBody, Status: "pending"}
@@ -115,7 +138,7 @@ func (h *EmailHandler) SendEmail(c *gin.Context) {
 		h.db.Model(&email).Updates(models.Email{Status: status, ErrorMessage: errorMessage})
 	}()
 
-	c.JSON(http.StatusCreated, models.SuccessResponse("Email queued for sending", email.ToResponse()))
+	c.JSON(http.StatusCreated, models.SuccessResponse("Email queued successfully", email.ToResponse()))
 }
 
 func (h *EmailHandler) GetEmailStats(c *gin.Context) {

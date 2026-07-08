@@ -13,9 +13,10 @@ type AuthMiddleware struct {
 }
 
 // NewAuthMiddleware creates new auth middleware
-func NewAuthMiddleware(db *gorm.DB, logger core.Logger) *AuthMiddleware {
+// NewAuthMiddleware creates new auth middleware using ModuleContext
+func NewAuthMiddleware(ctx core.ModuleContext, logger core.Logger) *AuthMiddleware {
 	return &AuthMiddleware{
-		db:     db,
+		db:     ctx.DB,
 		logger: logger,
 	}
 }

@@ -7,27 +7,47 @@ import (
 
 	"github.com/AgileExecutives/serverbase/internal/models"
 	"github.com/AgileExecutives/serverbase/modules/tenant/repo"
-	"github.com/AgileExecutives/serverbase/pkg/services"
+	"github.com/AgileExecutives/serverbase/pkg/utils"
 )
+
+// TenantService handles tenant operations
+type tenantBucketAPI interface {
+	CreateTenantBucket(ctx context.Context, tenantID uint) error
+	BucketExists(ctx context.Context, tenantID uint) (bool, error)
+}
 
 // TenantService handles tenant operations
 type TenantService struct {
 	repo                repo.TenantRepo
-	tenantBucketService *services.TenantBucketService
+	tenantBucketService tenantBucketAPI
 }
 
 // NewTenantService creates a new tenant service using a TenantRepo implementation
-func NewTenantService(r repo.TenantRepo, tenantBucketService *services.TenantBucketService) *TenantService {
+func NewTenantService(r repo.TenantRepo, tenantBucketService tenantBucketAPI) *TenantService {
 	return &TenantService{repo: r, tenantBucketService: tenantBucketService}
 }
 
 // CreateTenant creates a new tenant and its MinIO bucket
 func (s *TenantService) CreateTenant(ctx context.Context, req models.TenantCreateRequest) (*models.Tenant, error) {
+	// Generate slug if not provided
+	slug := req.Slug
+	if slug == "" {
+		base := utils.GenerateSlug(req.Name)
+		// fetch existing slugs
+		existing := []string{}
+		if tenants, err := s.repo.List(ctx); err == nil {
+			for _, t := range tenants {
+				existing = append(existing, t.Slug)
+			}
+		}
+		slug = utils.EnsureUniqueSlug(base, existing)
+	}
+
 	// Create tenant in database
 	tenant := models.Tenant{
 		CustomerID: req.CustomerID,
 		Name:       req.Name,
-		Slug:       req.Slug,
+		Slug:       slug,
 	}
 
 	if err := s.repo.Save(ctx, &tenant); err != nil {

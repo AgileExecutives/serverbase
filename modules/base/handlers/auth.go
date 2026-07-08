@@ -10,7 +10,7 @@ import (
 
 	"github.com/AgileExecutives/serverbase/internal/models"
 	emailServices "github.com/AgileExecutives/serverbase/modules/email/services"
-	basemodels "github.com/AgileExecutives/serverbase/modules/user/models" // module-local newsletter model
+	userservices "github.com/AgileExecutives/serverbase/modules/user/services"
 	"github.com/AgileExecutives/serverbase/pkg/auth"
 	"github.com/AgileExecutives/serverbase/pkg/config"
 	"github.com/AgileExecutives/serverbase/pkg/core"
@@ -24,17 +24,19 @@ import (
 // AuthHandlers provides authentication related handlers
 type AuthHandlers struct {
 	db             *gorm.DB
+	authService    *userservices.AuthService
 	logger         core.Logger
 	cfg            config.Config
 	moduleRegistry core.ModuleRegistry
 }
 
-// NewAuthHandlers creates new auth handlers
-func NewAuthHandlers(db *gorm.DB, logger core.Logger) *AuthHandlers {
+// NewAuthHandlers creates new auth handlers using ModuleContext
+func NewAuthHandlers(ctx core.ModuleContext, authSvc *userservices.AuthService, logger core.Logger) *AuthHandlers {
 	return &AuthHandlers{
-		db:     db,
-		logger: logger,
-		cfg:    config.Load(),
+		db:          ctx.DB,
+		authService: authSvc,
+		logger:      logger,
+		cfg:         config.Load(),
 	}
 }
 
@@ -151,8 +153,8 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 		// Try to validate as user-signup token
 		if signupTenantID, err := auth.ValidateUserSignupToken(signupToken); err == nil {
 			// Valid user-signup token found, join the specified tenant
-			var tenant models.Tenant
-			if err := h.db.First(&tenant, signupTenantID).Error; err != nil {
+			tenant, terr := h.authService.FindTenantByID(c.Request.Context(), signupTenantID)
+			if terr != nil || tenant == nil {
 				c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("Tenant not found", "Signup token references invalid tenant"))
 				return
 			}
@@ -182,32 +184,24 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 
 	// Create new tenant if tenantID is still 0 (no valid signup token was found)
 	if tenantID == 0 {
-		// Check if company name already exists
-		var existingTenant models.Tenant
-		if err := h.db.Where("name = ?", req.CompanyName).First(&existingTenant).Error; err == nil {
+		// Check if company name already exists using AuthService
+		existingTenant, eterr := h.authService.FindTenantByName(c.Request.Context(), req.CompanyName)
+		if eterr == nil && existingTenant != nil {
 			c.JSON(http.StatusConflict, models.ErrorResponseFunc("Company already exists", "A company with this name already exists"))
 			return
 		}
 
-		// Generate slug from company name
+		// Generate slug from company name and ensure uniqueness using AuthService
 		slug := utils.GenerateSlug(req.CompanyName)
-
-		// Check if slug already exists and make it unique if necessary
 		var existingSlugs []string
-		var tenants []models.Tenant
-		h.db.Select("slug").Find(&tenants)
-		for _, t := range tenants {
-			existingSlugs = append(existingSlugs, t.Slug)
+		if slugs, serr := h.authService.ListTenantSlugs(c.Request.Context()); serr == nil {
+			existingSlugs = slugs
 		}
 		slug = utils.EnsureUniqueSlug(slug, existingSlugs)
 
-		// Create new tenant
-		tenant := models.Tenant{
-			Name: req.CompanyName,
-			Slug: slug,
-		}
-
-		if err := h.db.Create(&tenant).Error; err != nil {
+		// Create new tenant via AuthService (delegates to TenantService)
+		tenant := models.Tenant{Name: req.CompanyName, Slug: slug}
+		if err := h.authService.CreateTenant(c.Request.Context(), &tenant); err != nil {
 			log.Printf("❌ Register: Failed to create tenant: %v", err)
 			c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to create tenant", err.Error()))
 			return
@@ -252,7 +246,7 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 		EmailVerifiedAt: emailVerifiedAt,
 	}
 
-	if err := h.db.Create(&user).Error; err != nil {
+	if err := h.authService.SaveUser(c.Request.Context(), &user); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to create user", err.Error()))
 		return
 	}
@@ -264,14 +258,14 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 
 	// Handle newsletter subscription if opted in
 	if req.NewsletterOptIn {
-		newsletter := basemodels.Newsletter{
+		newsletter := models.Newsletter{
 			Name:     req.FirstName + " " + req.LastName,
 			Email:    req.Email,
 			Interest: "general",
 			Source:   "registration",
 		}
 
-		if err := h.db.Create(&newsletter).Error; err != nil {
+		if err := h.authService.SaveNewsletter(c.Request.Context(), &newsletter); err != nil {
 			log.Printf("⚠️ Register: Failed to create newsletter subscription: %v (continuing anyway)", err)
 		} else {
 			log.Printf("✅ Newsletter subscription created for %s", req.Email)
@@ -384,7 +378,7 @@ func (h *AuthHandlers) Logout(c *gin.Context) {
 		Reason:    "User logout",
 	}
 
-	if err := h.db.Create(&blacklistEntry).Error; err != nil {
+	if err := h.authService.BlacklistToken(c.Request.Context(), &blacklistEntry); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to logout", err.Error()))
 		return
 	}
@@ -513,7 +507,8 @@ func (h *AuthHandlers) ChangePassword(c *gin.Context) {
 	}
 
 	// Update password
-	if err := h.db.Model(user).Update("password_hash", string(hashedPassword)).Error; err != nil {
+	user.PasswordHash = string(hashedPassword)
+	if err := h.authService.SaveUser(c.Request.Context(), user); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to update password", err.Error()))
 		return
 	}
@@ -564,7 +559,7 @@ func (h *AuthHandlers) VerifyEmail(c *gin.Context) {
 	user.EmailVerified = true
 	user.EmailVerifiedAt = &now
 
-	if err := h.db.Save(&user).Error; err != nil {
+	if err := h.authService.SaveUser(c.Request.Context(), &user); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to verify email", err.Error()))
 		return
 	}
@@ -742,7 +737,8 @@ func (h *AuthHandlers) ResetPassword(c *gin.Context) {
 	}
 
 	// Update password
-	if err := h.db.Model(&user).Update("password_hash", string(hashedPassword)).Error; err != nil {
+	user.PasswordHash = string(hashedPassword)
+	if err := h.authService.SaveUser(c.Request.Context(), &user); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to update password", err.Error()))
 		return
 	}
