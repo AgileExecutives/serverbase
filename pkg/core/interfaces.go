@@ -28,6 +28,18 @@ type Module interface {
 	SwaggerPaths() []string
 }
 
+// DocRegistry collects pre-rendered Swagger/OpenAPI 2.0 JSON from modules so
+// the application can merge them into a single combined spec at startup.
+// Modules call RegisterDoc inside their Initialize method.
+type DocRegistry interface {
+	// RegisterDoc stores a fully-rendered (no template directives) Swagger 2.0
+	// JSON document for a named module. Subsequent calls with the same name
+	// overwrite the previous entry.
+	RegisterDoc(moduleName, docJSON string)
+	// Docs returns all registered documents keyed by module name.
+	Docs() map[string]string
+}
+
 // ModuleContext provides dependencies to modules
 type ModuleContext struct {
 	DB             *gorm.DB
@@ -39,6 +51,12 @@ type ModuleContext struct {
 	Auth           AuthService
 	TokenService   TokenService
 	ModuleRegistry ModuleRegistry
+	// DocRegistry collects each module's swagger JSON at Initialize time.
+	// Modules that have pre-generated docs should call
+	//   ctx.DocRegistry.RegisterDoc(m.Name(), docs.SwaggerInfo.ReadDoc())
+	// The Application merges all registered docs into a single combined spec
+	// after all modules are initialized. Nil when swagger is disabled.
+	DocRegistry DocRegistry
 }
 
 // Entity represents a database entity with migrations

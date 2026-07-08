@@ -341,7 +341,7 @@ func (h *ContactHandlers) SubmitContactForm(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {array} basemodels.Newsletter
+// @Success 200 {array} models.Newsletter
 // @Failure 500 {object} models.ErrorResponse
 // @Router /contacts/newsletter [get]
 func (h *ContactHandlers) GetNewsletterSubscriptions(c *gin.Context) {
@@ -372,7 +372,7 @@ func (h *ContactHandlers) UnsubscribeFromNewsletter(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Email parameter is required"})
 		return
 	}
-	result := h.db.Where("email = ?", email).Delete(&basemodels.Newsletter{})
+	result := h.db.Unscoped().Where("email = ?", email).Delete(&basemodels.Newsletter{})
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unsubscribe from newsletter"})
 		return

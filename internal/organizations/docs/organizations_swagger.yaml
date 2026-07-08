@@ -1,0 +1,445 @@
+definitions:
+  models.CreateOrganizationRequest:
+    properties:
+      additional_payment_methods:
+        type: object
+      bankaccount_bank:
+        example: Deutsche Bank
+        type: string
+      bankaccount_bic:
+        example: DEUTDEFF
+        type: string
+      bankaccount_iban:
+        example: DE89370400440532013000
+        type: string
+      bankaccount_owner:
+        example: Acme Corporation
+        type: string
+      city:
+        example: New York
+        type: string
+      email:
+        example: info@acme.com
+        type: string
+      invoice_content:
+        type: object
+      name:
+        example: Acme Corporation
+        type: string
+      owner_name:
+        example: John Doe
+        type: string
+      owner_title:
+        example: CEO
+        type: string
+      phone:
+        example: +1-555-0123
+        type: string
+      street_address:
+        example: 123 Business St
+        type: string
+      tax_id:
+        example: TAX123456
+        type: string
+      tax_rate:
+        example: 19
+        type: number
+      tax_ustid:
+        example: DE123456789
+        type: string
+      unit_price:
+        example: 150
+        type: number
+      zip:
+        example: "12345"
+        type: string
+    required:
+    - name
+    type: object
+  models.ErrorResponse:
+    properties:
+      code:
+        type: integer
+      details:
+        type: string
+      error:
+        type: string
+    type: object
+  models.OrganizationAPIResponse:
+    properties:
+      data:
+        $ref: '#/definitions/models.OrganizationResponse'
+      message:
+        example: Organization retrieved successfully
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
+  models.OrganizationDeleteResponse:
+    properties:
+      message:
+        example: Organization deleted successfully
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
+  models.OrganizationListAPIResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/models.OrganizationResponse'
+        type: array
+      limit:
+        example: 10
+        type: integer
+      message:
+        example: Organizations retrieved successfully
+        type: string
+      page:
+        example: 1
+        type: integer
+      success:
+        example: true
+        type: boolean
+      total:
+        example: 100
+        type: integer
+    type: object
+  models.OrganizationResponse:
+    properties:
+      additional_payment_methods:
+        type: object
+      amount_format:
+        type: string
+      bankaccount_bank:
+        type: string
+      bankaccount_bic:
+        type: string
+      bankaccount_iban:
+        type: string
+      bankaccount_owner:
+        type: string
+      city:
+        type: string
+      created_at:
+        type: string
+      date_format:
+        type: string
+      email:
+        type: string
+      extra_efforts_billing_mode:
+        type: string
+      extra_efforts_config:
+        type: object
+      id:
+        type: integer
+      invoice_content:
+        type: object
+      line_item_double_unit_text:
+        type: string
+      line_item_single_unit_text:
+        type: string
+      locale:
+        type: string
+      name:
+        type: string
+      owner_name:
+        type: string
+      owner_title:
+        type: string
+      phone:
+        type: string
+      street_address:
+        type: string
+      tax_id:
+        type: string
+      tax_rate:
+        type: number
+      tax_ustid:
+        type: string
+      tenant_id:
+        type: integer
+      time_format:
+        type: string
+      unit_price:
+        type: number
+      updated_at:
+        type: string
+      zip:
+        type: string
+    type: object
+  models.UpdateOrganizationRequest:
+    properties:
+      additional_payment_methods:
+        type: object
+      bankaccount_bank:
+        example: Deutsche Bank
+        type: string
+      bankaccount_bic:
+        example: DEUTDEFF
+        type: string
+      bankaccount_iban:
+        example: DE89370400440532013000
+        type: string
+      bankaccount_owner:
+        example: Acme Corporation
+        type: string
+      city:
+        example: New York
+        type: string
+      email:
+        example: info@acme.com
+        type: string
+      invoice_content:
+        type: object
+      name:
+        example: Acme Corporation
+        type: string
+      owner_name:
+        example: John Doe
+        type: string
+      owner_title:
+        example: CEO
+        type: string
+      phone:
+        example: +1-555-0123
+        type: string
+      street_address:
+        example: 123 Business St
+        type: string
+      tax_id:
+        example: TAX123456
+        type: string
+      tax_rate:
+        example: 19
+        type: number
+      tax_ustid:
+        example: DE123456789
+        type: string
+      unit_price:
+        example: 150
+        type: number
+      zip:
+        example: "12345"
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Organization management endpoints.
+  title: Organizations API
+  version: 1.0.0
+paths:
+  /organizations:
+    get:
+      description: Retrieve all organizations for the authenticated user with pagination
+      operationId: getOrganizations
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Number of items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.OrganizationListAPIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all organizations
+      tags:
+      - organizations
+    post:
+      consumes:
+      - application/json
+      description: Create a new organization with the provided information
+      operationId: createOrganization
+      parameters:
+      - description: Organization information
+        in: body
+        name: organization
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateOrganizationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.OrganizationAPIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new organization
+      tags:
+      - organizations
+  /organizations/{id}:
+    delete:
+      description: Delete an organization by ID
+      operationId: deleteOrganization
+      parameters:
+      - description: Organization ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.OrganizationDeleteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete an organization
+      tags:
+      - organizations
+    get:
+      description: Retrieve a specific organization by ID
+      operationId: getOrganizationById
+      parameters:
+      - description: Organization ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.OrganizationAPIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get an organization by ID
+      tags:
+      - organizations
+    put:
+      consumes:
+      - application/json
+      description: Update an organization's information
+      operationId: updateOrganization
+      parameters:
+      - description: Organization ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated organization information
+        in: body
+        name: organization
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateOrganizationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.OrganizationAPIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update an organization
+      tags:
+      - organizations
+  /organizations/supported-formats:
+    get:
+      description: Get all supported date, time, and amount formats with examples
+      operationId: getSupportedFormats
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Supported formats with examples
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get supported formats
+      tags:
+      - organizations
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

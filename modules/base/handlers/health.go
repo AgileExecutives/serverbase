@@ -44,8 +44,8 @@ func getEnvAsBool(key string, defaultVal bool) bool {
 // @Description Check the health status of the API and database
 // @Tags health
 // @Produce json
-// @Success 200 {object} models.HealthResponse
-// @Failure 503 {object} models.ErrorResponse
+// @Success 200 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
 // @Router /health [get]
 func (h *HealthHandlers) HealthCheck(c *gin.Context) {
 	response := gin.H{

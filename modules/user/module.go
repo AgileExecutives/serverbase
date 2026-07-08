@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 
+	basedocs "github.com/AgileExecutives/serverbase/modules/base/docs"
 	"github.com/AgileExecutives/serverbase/modules/user/entities"
 	"github.com/AgileExecutives/serverbase/modules/user/events"
 	"github.com/AgileExecutives/serverbase/modules/user/handlers"
@@ -51,6 +52,12 @@ func (m *UserModule) Initialize(ctx core.ModuleContext) error {
 	m.userSettingsHandlers = handlers.NewUserSettingsHandlers(ctx.DB, ctx.Logger)
 	m.eventHandlers = events.NewBaseEventHandlers(ctx.EventBus, ctx.Logger)
 	m.authMiddleware = middleware.NewAuthMiddleware(ctx.DB, ctx.Logger)
+
+	// Register pre-generated swagger docs (same handler set as the base module).
+	if ctx.DocRegistry != nil {
+		ctx.DocRegistry.RegisterDoc(m.Name(), basedocs.SwaggerInfobase.ReadDoc())
+	}
+
 	ctx.Logger.Info("User module initialized successfully")
 	return nil
 }

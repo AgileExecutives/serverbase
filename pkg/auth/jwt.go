@@ -39,7 +39,7 @@ func GenerateJWT(userID, tenantID uint, role string) (string, error) {
 		Role:      role,
 		TokenType: "auth",
 		RegisteredClaims: jwt.RegisteredClaims{
-			ID:        fmt.Sprintf("%d_%d", userID, time.Now().Unix()),
+			ID:        fmt.Sprintf("%d_%d", userID, time.Now().UnixNano()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
@@ -59,7 +59,7 @@ func GenerateOnboardingToken(userID, tenantID uint, role string) (string, error)
 		TokenType:   "onboarding",
 		Permissions: "limited", // Can only access onboarding endpoints
 		RegisteredClaims: jwt.RegisteredClaims{
-			ID:        fmt.Sprintf("onboarding_%d_%d", userID, time.Now().Unix()),
+			ID:        fmt.Sprintf("onboarding_%d_%d", userID, time.Now().UnixNano()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(72 * time.Hour)), // 3 days for onboarding
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
@@ -154,7 +154,7 @@ func GenerateVerificationToken(email string, userID uint) (string, error) {
 		TokenType: "verification",
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   email,
-			ID:        fmt.Sprintf("verify_%d_%d", userID, time.Now().Unix()),
+			ID:        fmt.Sprintf("verify_%d_%d", userID, time.Now().UnixNano()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), // 24 hours to verify
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),

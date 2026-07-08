@@ -46,6 +46,7 @@ type Config struct {
 	Email     EmailConfig
 	PDF       PDFConfig
 	RateLimit RateLimitConfig
+	Swagger   SwaggerConfig
 }
 
 // ServerConfig holds server configuration
@@ -95,6 +96,13 @@ type RateLimitConfig struct {
 	Enabled bool
 }
 
+// SwaggerConfig controls the combined swagger spec served at /swagger/index.html.
+type SwaggerConfig struct {
+	Title       string
+	Description string
+	Version     string
+}
+
 // Load loads configuration from environment variables with defaults
 func Load() Config {
 	return Config{
@@ -142,6 +150,11 @@ func Load() Config {
 		},
 		RateLimit: RateLimitConfig{
 			Enabled: getEnvAsBool("RATE_LIMIT_ENABLED", true),
+		},
+		Swagger: SwaggerConfig{
+			Title:       getEnv("SWAGGER_TITLE", "AE SaaS API"),
+			Description: getEnv("SWAGGER_DESCRIPTION", "Combined API documentation for all registered modules"),
+			Version:     getEnv("SWAGGER_VERSION", "1.0.0"),
 		},
 	}
 }

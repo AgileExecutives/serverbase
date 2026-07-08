@@ -266,7 +266,9 @@ func (h *ContactHandlers) UnsubscribeFromNewsletter(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Email parameter is required"})
 		return
 	}
-	result := h.db.Where("email = ?", email).Delete(&basemodels.Newsletter{})
+	// Unscoped so the row is hard-deleted; soft-deleted rows are not re-subscribable
+	// via the OnConflict upsert path (no unique index on email in SQLite).
+	result := h.db.Unscoped().Where("email = ?", email).Delete(&basemodels.Newsletter{})
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unsubscribe from newsletter"})
 		return

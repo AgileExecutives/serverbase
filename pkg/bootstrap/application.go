@@ -22,6 +22,7 @@ import (
 
 	// internalHandlers removed — modules register internal handlers themselves
 	// pdfServices removed — PDF handler is provided via internal handlers/modules
+	"github.com/AgileExecutives/serverbase/pkg/swagger"
 	"github.com/AgileExecutives/shared-modules/saas-base/services/storage"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -58,16 +59,38 @@ func (app *Application) RegisterModule(module core.Module) error {
 func (app *Application) Initialize() error {
 	app.logger.Info("Initializing application...")
 
-	// 1. Initialize core services
+	// 1. Initialize core services (creates DocRegistry and injects into context)
 	if err := app.initializeCoreServices(); err != nil {
 		return fmt.Errorf("failed to initialize core services: %w", err)
 	}
 
-	// 2. Initialize modules
+	// 2. Initialize modules – each module that has pre-generated swagger docs calls
+	//    ctx.DocRegistry.RegisterDoc() inside its Initialize method.
 	app.logger.Info("Initializing modules...")
 	if err := app.registry.InitializeAll(app.context); err != nil {
 		return fmt.Errorf("failed to initialize modules: %w", err)
 	}
+
+	// 2.5. Merge all module swagger docs into one combined spec and register it
+	//      so ginSwagger serves the full API at /swagger/index.html.
+	app.logger.Info("Merging swagger documentation from all modules...")
+	docReg := app.context.DocRegistry.(*swagger.Registry)
+	if err := swagger.MergeAndRegister(docReg, swagger.ServerInfo{
+		Title:       app.config.Swagger.Title,
+		Description: app.config.Swagger.Description,
+		Version:     app.config.Swagger.Version,
+		Host:        app.config.Server.Host + ":" + app.config.Server.Port,
+		BasePath:    "/api/v1",
+		Schemes:     []string{"http", "https"},
+	}); err != nil {
+		app.logger.Warn("Swagger merge failed (docs may be incomplete):", err)
+	} else {
+		n := len(docReg.Docs())
+		app.logger.Info("Swagger documentation merged", "module_count", n)
+	}
+	// Mount swagger UI pointing at the merged spec.
+	app.server.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler,
+		ginSwagger.InstanceName(swagger.MergedSpecName)))
 
 	// 3. Run migrations (includes all module entities)
 	app.logger.Info("Running database migrations...")
@@ -196,8 +219,9 @@ func (app *Application) initializeCoreServices() error {
 		app.securityMiddleware(),
 	)
 
-	// Swagger documentation
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// Swagger documentation is mounted AFTER modules initialise (and their docs are
+	// merged). See the Initialize() method where MergeAndRegister is called and
+	// ginSwagger.WrapHandler is registered using swagger.MergedSpecName.
 
 	// Setup miscellaneous static file routes (favicon, robots.txt, etc.)
 	app.setupStaticMiscRoutes(router)
@@ -221,6 +245,9 @@ func (app *Application) initializeCoreServices() error {
 	// Service Registry
 	services := core.NewServiceRegistry()
 
+	// Doc registry – collects per-module swagger JSON during module Initialize.
+	docRegistry := swagger.NewRegistry()
+
 	// Create module context
 	app.context = core.ModuleContext{
 		DB:             db,
@@ -232,6 +259,7 @@ func (app *Application) initializeCoreServices() error {
 		Auth:           authService,
 		TokenService:   tokenService,
 		ModuleRegistry: app.registry,
+		DocRegistry:    docRegistry,
 	}
 
 	app.server = router

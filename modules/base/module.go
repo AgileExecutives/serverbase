@@ -1,8 +1,13 @@
 package base
 
+// To regenerate swagger docs for this module run from serverbase/modules/base:
+//
+//go:generate swag init -g doc.go --dir .,handlers,../user/entities,../user/models,../../internal/models,../../pkg/utils --output docs --instanceName base
+
 import (
 	"context"
 
+	basedocs "github.com/AgileExecutives/serverbase/modules/base/docs"
 	"github.com/AgileExecutives/serverbase/modules/user/entities"
 	"github.com/AgileExecutives/serverbase/modules/user/events"
 	"github.com/AgileExecutives/serverbase/modules/user/handlers"
@@ -61,6 +66,11 @@ func (m *BaseModule) Initialize(ctx core.ModuleContext) error {
 
 	// Initialize middleware
 	m.authMiddleware = middleware.NewAuthMiddleware(ctx.DB, ctx.Logger)
+
+	// Register pre-generated swagger docs so they appear in the combined spec.
+	if ctx.DocRegistry != nil {
+		ctx.DocRegistry.RegisterDoc(m.Name(), basedocs.SwaggerInfobase.ReadDoc())
+	}
 
 	ctx.Logger.Info("Base module initialized successfully")
 	return nil

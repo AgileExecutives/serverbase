@@ -50,6 +50,10 @@ func (m *EmailModule) Initialize(ctx core.ModuleContext) error {
 		events.NewEmailFailedHandler(ctx.DB, ctx.Logger),
 	}
 
+	if ctx.DocRegistry != nil {
+		ctx.DocRegistry.RegisterDoc(m.Name(), EmailSwaggerJSON)
+	}
+
 	ctx.Logger.Info("Email module initialized successfully")
 	return nil
 }
