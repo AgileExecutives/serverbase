@@ -2,11 +2,14 @@ package services
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 
 	"github.com/AgileExecutives/serverbase/internal/models"
 	tenantrepo "github.com/AgileExecutives/serverbase/modules/tenant/repo"
 	userrepo "github.com/AgileExecutives/serverbase/modules/user/repo"
 	"github.com/AgileExecutives/serverbase/pkg/core"
+	"github.com/AgileExecutives/serverbase/pkg/eventbus"
 )
 
 // AuthService provides authentication related services
@@ -43,46 +46,54 @@ func (s *AuthService) FindByEmail(ctx context.Context, email string) (*models.Us
 	return s.userRepo.FindByEmail(ctx, email)
 }
 
+// FindByID looks up a user by numeric id.
+func (s *AuthService) FindByID(ctx context.Context, id uint) (*models.User, error) {
+	if s.userRepo == nil {
+		return nil, nil
+	}
+	return s.userRepo.FindByID(ctx, id)
+}
+
+// FindByUsernameOrEmail looks up a user by username or email (login convenience).
+func (s *AuthService) FindByUsernameOrEmail(ctx context.Context, identifier string) (*models.User, error) {
+	if s.userRepo == nil {
+		return nil, nil
+	}
+	return s.userRepo.FindByUsernameOrEmail(ctx, identifier)
+}
+
 // SaveUser saves the user entity via repository.
 func (s *AuthService) SaveUser(ctx context.Context, u *models.User) error {
 	if s.userRepo == nil {
 		return nil
 	}
-	return s.userRepo.Save(ctx, u)
+	isNew := u.ID == 0
+	if err := s.userRepo.Save(ctx, u); err != nil {
+		return err
+	}
+	if isNew {
+		// publish user.created asynchronously
+		userIDStr := strconv.FormatUint(uint64(u.ID), 10)
+		tenantIDStr := strconv.FormatUint(uint64(u.TenantID), 10)
+		go eventbus.PublishUserCreatedAsync(ctx, userIDStr, u.Email, tenantIDStr)
+	}
+	return nil
 }
 
 // SaveNewsletter persists a newsletter subscription via the user repo.
 func (s *AuthService) SaveNewsletter(ctx context.Context, n *models.Newsletter) error {
-	// Prefer explicit newsletter repo when available
-	if s.newsletterRepo != nil {
-		return s.newsletterRepo.SaveNewsletter(ctx, n)
+	if s.newsletterRepo == nil {
+		return fmt.Errorf("newsletter repo not provided to AuthService")
 	}
-	// Fallback to underlying userRepo if it still implements the method
-	if s.userRepo == nil {
-		return nil
-	}
-	if nr, ok := s.userRepo.(interface {
-		SaveNewsletter(ctx context.Context, n *models.Newsletter) error
-	}); ok {
-		return nr.SaveNewsletter(ctx, n)
-	}
-	return nil
+	return s.newsletterRepo.SaveNewsletter(ctx, n)
 }
 
 // BlacklistToken persists a token blacklist entry via the user repo.
 func (s *AuthService) BlacklistToken(ctx context.Context, tb *models.TokenBlacklist) error {
-	if s.tokenRepo != nil {
-		return s.tokenRepo.SaveTokenBlacklist(ctx, tb)
+	if s.tokenRepo == nil {
+		return fmt.Errorf("token blacklist repo not provided to AuthService")
 	}
-	if s.userRepo == nil {
-		return nil
-	}
-	if tr, ok := s.userRepo.(interface {
-		SaveTokenBlacklist(ctx context.Context, tb *models.TokenBlacklist) error
-	}); ok {
-		return tr.SaveTokenBlacklist(ctx, tb)
-	}
-	return nil
+	return s.tokenRepo.SaveTokenBlacklist(ctx, tb)
 }
 
 // FindTenantByID looks up a tenant by numeric id using the injected TenantRepo.

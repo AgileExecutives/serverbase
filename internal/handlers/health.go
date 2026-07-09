@@ -1,76 +1,26 @@
 package handlers
 
 import (
-	"net/http"
-	"time"
-
-	"github.com/AgileExecutives/serverbase/internal/models"
+	basehandlers "github.com/AgileExecutives/serverbase/modules/base/handlers"
 	"github.com/AgileExecutives/serverbase/pkg/config"
+	"github.com/AgileExecutives/serverbase/pkg/core"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-type HealthHandler struct {
-	db  *gorm.DB
-	cfg config.Config
-}
+// HealthHandler delegates health endpoints to the base module's handlers.
+type HealthHandler struct{ delegate *basehandlers.HealthHandlers }
 
-// NewHealthHandler creates a new health handler
+// NewHealthHandler creates a new health handler (legacy DB-based constructor)
 func NewHealthHandler(db *gorm.DB, cfg config.Config) *HealthHandler {
-	return &HealthHandler{
-		db:  db,
-		cfg: cfg,
-	}
+	return NewHealthHandlerWithCtx(core.ModuleContext{DB: db}, cfg)
 }
 
-// Health performs a health check
-// DISABLED-SWAGGER: @Summary Health check
-// DISABLED-SWAGGER: @Description Check the health status of the API and database
-// DISABLED-SWAGGER: @Tags health
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Success 200 {object} models.HealthResponse
-// DISABLED-SWAGGER: @Failure 503 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /health [get]
-func (h *HealthHandler) Health(c *gin.Context) {
-	// Check database connection
-	sqlDB, err := h.db.DB()
-	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{
-			Error:   "Database connection error",
-			Details: err.Error(),
-		})
-		return
-	}
-
-	if err := sqlDB.Ping(); err != nil {
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{
-			Error:   "Database ping failed",
-			Details: err.Error(),
-		})
-		return
-	}
-
-	response := models.HealthResponse{
-		Status:    "healthy",
-		Timestamp: time.Now().Format(time.RFC3339),
-		Version:   "1.0.0", // TODO: Get from config
-		Database:  "connected",
-		Settings: models.HealthSettingsResponse{
-			MockEmail:        h.cfg.Email.MockEmail,
-			RateLimitEnabled: h.cfg.RateLimit.Enabled,
-		},
-	}
-
-	c.JSON(http.StatusOK, response)
+// NewHealthHandlerWithCtx creates a HealthHandler using ModuleContext
+func NewHealthHandlerWithCtx(ctx core.ModuleContext, cfg config.Config) *HealthHandler {
+	// Delegate to base module's health handlers
+	return &HealthHandler{delegate: basehandlers.NewHealthHandlers(ctx, ctx.Logger)}
 }
 
-// Ping performs a simple ping check
-// DISABLED-SWAGGER: @Summary Ping check
-// DISABLED-SWAGGER: @Description Simple ping endpoint
-// DISABLED-SWAGGER: @Tags health
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Success 200 {object} models.APIResponse "pong"
-// DISABLED-SWAGGER: @Router /api/v1/ping [get]
-func (h *HealthHandler) Ping(c *gin.Context) {
-	c.JSON(http.StatusOK, models.SuccessMessageResponse("pong"))
-}
+func (h *HealthHandler) Health(c *gin.Context) { h.delegate.HealthCheck(c) }
+func (h *HealthHandler) Ping(c *gin.Context)   { h.delegate.Ping(c) }

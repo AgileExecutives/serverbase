@@ -32,6 +32,18 @@ func (r *FakeUserRepo) FindByEmail(ctx context.Context, email string) (*models.U
 	return nil, nil
 }
 
+func (r *FakeUserRepo) FindByUsernameOrEmail(ctx context.Context, identifier string) (*models.User, error) {
+	if u, ok := r.byEmail[identifier]; ok {
+		return u, nil
+	}
+	for _, u := range r.byEmail {
+		if u != nil && u.Username == identifier {
+			return u, nil
+		}
+	}
+	return nil, nil
+}
+
 func (r *FakeUserRepo) Save(ctx context.Context, u *models.User) error {
 	if u == nil {
 		return nil
@@ -51,7 +63,7 @@ func (r *FakeUserRepo) SaveTokenBlacklist(ctx context.Context, tb *models.TokenB
 func TestAuthService_FindByEmailAndSave(t *testing.T) {
 	logger := testutils.NewMockLogger()
 	repo := NewFakeUserRepo()
-	svc := NewAuthServiceWithRepo(repo, nil, nil, nil, logger)
+	svc := NewAuthServiceWithRepo(repo, nil, repo, repo, logger)
 	ctx := context.Background()
 
 	// missing user returns nil

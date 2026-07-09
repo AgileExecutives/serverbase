@@ -29,6 +29,14 @@ func (r *GormUserRepo) FindByEmail(ctx context.Context, email string) (*models.U
 	return &u, nil
 }
 
+func (r *GormUserRepo) FindByUsernameOrEmail(ctx context.Context, identifier string) (*models.User, error) {
+	var u models.User
+	if err := r.db.Where("username = ? OR email = ?", identifier, identifier).First(&u).Error; err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
 func (r *GormUserRepo) Save(ctx context.Context, u *models.User) error {
 	return r.db.Save(u).Error
 }

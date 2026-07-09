@@ -15,6 +15,9 @@ type UserRepo interface {
 	// FindByEmail looks up a user by email address.
 	FindByEmail(ctx context.Context, email string) (*models.User, error)
 
+	// FindByUsernameOrEmail looks up a user by username or email (used by login flows)
+	FindByUsernameOrEmail(ctx context.Context, identifier string) (*models.User, error)
+
 	// Save persists the user entity (create or update).
 	Save(ctx context.Context, u *models.User) error
 }

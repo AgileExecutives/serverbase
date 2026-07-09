@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/AgileExecutives/serverbase/internal/models"
+	userrepo "github.com/AgileExecutives/serverbase/modules/user/repo"
 	"github.com/AgileExecutives/serverbase/pkg/testutils"
 	"github.com/stretchr/testify/assert"
 )
@@ -22,7 +23,8 @@ func (f *fakeTenantCreator) CreateTenant(ctx context.Context, req models.TenantC
 
 func TestAuthService_CreateTenant_DelegatesToTenantService(t *testing.T) {
 	logger := testutils.NewMockLogger()
-	svc := NewAuthServiceWithRepo(nil, nil, nil, nil, logger)
+	repo := userrepo.NewInMemoryUserRepo()
+	svc := NewAuthServiceWithRepo(repo, nil, repo, repo, logger)
 	fake := &fakeTenantCreator{}
 	svc.SetTenantService(fake)
 

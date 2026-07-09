@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 
 	emailServices "github.com/AgileExecutives/serverbase/modules/email/services"
@@ -14,7 +13,6 @@ import (
 	"github.com/AgileExecutives/serverbase/pkg/auth"
 	"github.com/AgileExecutives/serverbase/pkg/config"
 	"github.com/AgileExecutives/serverbase/pkg/core"
-	"github.com/AgileExecutives/serverbase/pkg/eventbus"
 	"github.com/AgileExecutives/serverbase/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -195,9 +193,7 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to create user", err.Error()))
 		return
 	}
-	userIDStr := strconv.FormatUint(uint64(user.ID), 10)
-	tenantIDStr := strconv.FormatUint(uint64(user.TenantID), 10)
-	eventbus.PublishUserCreatedAsync(c.Request.Context(), userIDStr, user.Email, tenantIDStr)
+	// Event is published by AuthService.SaveUser for new users; no-op here.
 	if req.NewsletterOptIn {
 		newsletter := models.Newsletter{
 			Name:     req.FirstName + " " + req.LastName,

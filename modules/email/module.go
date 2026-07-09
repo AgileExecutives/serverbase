@@ -6,6 +6,7 @@ import (
 	"github.com/AgileExecutives/serverbase/modules/email/entities"
 	"github.com/AgileExecutives/serverbase/modules/email/events"
 	"github.com/AgileExecutives/serverbase/modules/email/handlers"
+	"github.com/AgileExecutives/serverbase/modules/email/repo"
 	"github.com/AgileExecutives/serverbase/modules/email/services"
 	"github.com/AgileExecutives/serverbase/pkg/core"
 )
@@ -42,7 +43,8 @@ func (m *EmailModule) Initialize(ctx core.ModuleContext) error {
 
 	m.emailEntity = entities.NewEmailEntity()
 	m.emailService = services.NewEmailService()
-	m.emailHandler = handlers.NewEmailHandler(ctx.DB, m.emailService)
+	emailRepo := repo.NewGormEmailRepo(ctx.DB)
+	m.emailHandler = handlers.NewEmailHandler(emailRepo, m.emailService)
 	m.publicHandler = handlers.NewPublicEmailRoutes(m.emailHandler)
 
 	m.eventHandlers = []core.EventHandler{

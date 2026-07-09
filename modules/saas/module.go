@@ -10,47 +10,32 @@ package saas
 import (
 	"context"
 
+	"github.com/AgileExecutives/serverbase/module"
+	custrepo "github.com/AgileExecutives/serverbase/modules/customers/repo"
 	"github.com/AgileExecutives/serverbase/pkg/core"
 	saasEntities "github.com/AgileExecutives/shared-modules/saas-base/entities"
 	saasHandlers "github.com/AgileExecutives/shared-modules/saas-base/handlers"
+	saasrepo "github.com/AgileExecutives/shared-modules/saas-base/repo"
+	saassvc "github.com/AgileExecutives/shared-modules/saas-base/services"
 	"github.com/gin-gonic/gin"
 )
 
-// NewSaaSModule returns a new SaaSModule.
+// NewSaaSModule returns a new SaaSModule implemented via AdapterModule.
 func NewSaaSModule() core.Module {
-	return &saaSModule{}
+	return module.NewAdapterModule("saas", "1.0.0", []string{},
+		module.WithEntities(saasEntities.NewPlanEntity(), saasEntities.NewCustomerEntity()),
+		module.WithRoutes(&customerRouteProvider{}, &planRouteProvider{}),
+	)
 }
 
 type saaSModule struct{}
-
-func (m *saaSModule) Name() string           { return "saas" }
-func (m *saaSModule) Version() string        { return "1.0.0" }
-func (m *saaSModule) Dependencies() []string { return []string{} }
 
 func (m *saaSModule) Initialize(_ core.ModuleContext) error { return nil }
 func (m *saaSModule) Start(_ context.Context) error         { return nil }
 func (m *saaSModule) Stop(_ context.Context) error          { return nil }
 
-// Entities returns only Plan and Customer — no Newsletter — so we don't add a
-// unique constraint on newsletter.email that conflicts with the user module.
-func (m *saaSModule) Entities() []core.Entity {
-	return []core.Entity{
-		saasEntities.NewPlanEntity(),
-		saasEntities.NewCustomerEntity(),
-	}
-}
-
-func (m *saaSModule) Routes() []core.RouteProvider {
-	return []core.RouteProvider{
-		&customerRouteProvider{},
-		&planRouteProvider{},
-	}
-}
-
-func (m *saaSModule) EventHandlers() []core.EventHandler    { return nil }
-func (m *saaSModule) Services() []core.ServiceProvider      { return nil }
-func (m *saaSModule) Middleware() []core.MiddlewareProvider { return nil }
-func (m *saaSModule) SwaggerPaths() []string                { return nil }
+// Note: the route provider implementations remain unchanged and construct
+// services/handlers at RegisterRoutes time so they work with the adapter.
 
 // ─── Route providers ─────────────────────────────────────────────────────────
 
@@ -60,7 +45,11 @@ func (r *customerRouteProvider) GetPrefix() string                { return "/cus
 func (r *customerRouteProvider) GetMiddleware() []gin.HandlerFunc { return nil }
 func (r *customerRouteProvider) GetSwaggerTags() []string         { return []string{"customers"} }
 func (r *customerRouteProvider) RegisterRoutes(router *gin.RouterGroup, ctx core.ModuleContext) {
-	h := saasHandlers.NewCustomerHandlers(ctx.DB)
+	// Construct customer service using serverbase customer repo and wire to handlers
+	custRepo := custrepo.NewGormCustomerRepo(ctx.DB)
+	custSvc := saassvc.NewCustomerServiceWithDB(custRepo, ctx.DB, ctx.Logger)
+
+	h := saasHandlers.NewCustomerHandlers(custSvc)
 	auth := router.Group("")
 	auth.Use(ctx.Auth.RequireAuth())
 	auth.GET("", h.GetCustomers)
@@ -76,7 +65,10 @@ func (r *planRouteProvider) GetPrefix() string                { return "/plans" 
 func (r *planRouteProvider) GetMiddleware() []gin.HandlerFunc { return nil }
 func (r *planRouteProvider) GetSwaggerTags() []string         { return []string{"plans"} }
 func (r *planRouteProvider) RegisterRoutes(router *gin.RouterGroup, ctx core.ModuleContext) {
-	h := saasHandlers.NewPlanHandlers(ctx.DB)
+	// Construct plan service using saas-base plan repo
+	planRepo := saasrepo.NewGormPlanRepo(ctx.DB)
+	planSvc := saassvc.NewPlanService(planRepo)
+	h := saasHandlers.NewPlanHandlers(planSvc)
 	// Public read endpoints
 	router.GET("", h.GetPlans)
 	router.GET("/:id", h.GetPlan)

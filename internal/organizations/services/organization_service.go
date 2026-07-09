@@ -2,24 +2,29 @@ package services
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 
 	"github.com/AgileExecutives/serverbase/internal/models"
+	orgrepo "github.com/AgileExecutives/serverbase/internal/organizations/repo"
 	templateServices "github.com/AgileExecutives/serverbase/modules/templates/services"
 	"gorm.io/gorm"
 )
 
 // OrganizationService handles business logic for organizations
 type OrganizationService struct {
-	db              *gorm.DB
+	repo            orgrepo.OrganizationRepo
 	templateService *templateServices.TemplateService
 }
 
-// NewOrganizationService creates a new organization service
+// NewOrganizationService creates a new organization service backed by GORM DB (compat)
 func NewOrganizationService(db *gorm.DB) *OrganizationService {
-	return &OrganizationService{db: db}
+	return NewOrganizationServiceWithRepo(orgrepo.NewGormOrganizationRepo(db))
+}
+
+// NewOrganizationServiceWithRepo creates a new organization service using the provided repo
+func NewOrganizationServiceWithRepo(r orgrepo.OrganizationRepo) *OrganizationService {
+	return &OrganizationService{repo: r}
 }
 
 // SetTemplateService sets the template service for copying templates
@@ -51,7 +56,8 @@ func (s *OrganizationService) CreateOrganization(req models.CreateOrganizationRe
 		InvoiceContent:           req.InvoiceContent,
 	}
 
-	if err := s.db.Create(&organization).Error; err != nil {
+	ctx := context.Background()
+	if err := s.repo.Create(ctx, &organization); err != nil {
 		return nil, fmt.Errorf("failed to create organization: %w", err)
 	}
 
@@ -71,50 +77,32 @@ func (s *OrganizationService) CreateOrganization(req models.CreateOrganizationRe
 
 // GetOrganizationByID returns an organization by ID
 func (s *OrganizationService) GetOrganizationByID(id, tenantID uint) (*models.Organization, error) {
-	var organization models.Organization
-	if err := s.db.Where("id = ? AND tenant_id = ?", id, tenantID).First(&organization).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("organization with ID %d not found", id)
-		}
-		return nil, fmt.Errorf("failed to fetch organization: %w", err)
+	ctx := context.Background()
+	org, err := s.repo.GetByID(ctx, id, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("organization with ID %d not found", id)
 	}
-	return &organization, nil
+	return org, nil
 }
 
 // GetOrganizations returns all organizations for a tenant with pagination
 // This method is exposed for use by other modules
 func (s *OrganizationService) GetOrganizations(page, limit int, tenantID uint) ([]models.Organization, int64, error) {
-	var organizations []models.Organization
-	var total int64
-
 	offset := (page - 1) * limit
-
-	// Count total records
-	if err := s.db.Model(&models.Organization{}).
-		Where("tenant_id = ?", tenantID).
-		Count(&total).Error; err != nil {
-		return nil, 0, fmt.Errorf("failed to count organizations: %w", err)
-	}
-
-	// Get paginated records
-	if err := s.db.Where("tenant_id = ?", tenantID).
-		Offset(offset).
-		Limit(limit).
-		Find(&organizations).Error; err != nil {
+	ctx := context.Background()
+	organizations, total, err := s.repo.ListByTenant(ctx, offset, limit, tenantID)
+	if err != nil {
 		return nil, 0, fmt.Errorf("failed to fetch organizations: %w", err)
 	}
-
 	return organizations, total, nil
 }
 
 // UpdateOrganization updates an existing organization
 func (s *OrganizationService) UpdateOrganization(id, tenantID uint, req models.UpdateOrganizationRequest) (*models.Organization, error) {
-	var organization models.Organization
-	if err := s.db.Where("id = ? AND tenant_id = ?", id, tenantID).First(&organization).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("organization with ID %d not found", id)
-		}
-		return nil, fmt.Errorf("failed to fetch organization: %w", err)
+	ctx := context.Background()
+	organization, err := s.repo.GetByID(ctx, id, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("organization with ID %d not found", id)
 	}
 
 	// Update fields if provided
@@ -173,21 +161,18 @@ func (s *OrganizationService) UpdateOrganization(id, tenantID uint, req models.U
 		organization.InvoiceContent = req.InvoiceContent
 	}
 
-	if err := s.db.Save(&organization).Error; err != nil {
+	if err := s.repo.Update(ctx, organization); err != nil {
 		return nil, fmt.Errorf("failed to update organization: %w", err)
 	}
 
-	return &organization, nil
+	return organization, nil
 }
 
 // DeleteOrganization deletes an organization (soft delete)
 func (s *OrganizationService) DeleteOrganization(id, tenantID uint) error {
-	result := s.db.Where("id = ? AND tenant_id = ?", id, tenantID).Delete(&models.Organization{})
-	if result.Error != nil {
-		return fmt.Errorf("failed to delete organization: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("organization with ID %d not found", id)
+	ctx := context.Background()
+	if err := s.repo.Delete(ctx, id, tenantID); err != nil {
+		return fmt.Errorf("failed to delete organization: %w", err)
 	}
 	return nil
 }

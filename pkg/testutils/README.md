@@ -1,3 +1,59 @@
+# testutils
+
+This package provides helpers and small fakes used across unit and integration tests.
+
+Main helpers
+
+- Database
+  - `SetupTestDB(t *testing.T) *gorm.DB` — creates an in-memory SQLite DB and runs core migrations.
+  - `SetupTestDBWithLogging(t *testing.T) *gorm.DB` — same, but with query logging enabled.
+  - `CleanupTestDB(db *gorm.DB)` — closes DB connection.
+  - `MigrateTestDB(t *testing.T, db *gorm.DB, entities ...interface{})` — run AutoMigrate for extra entities.
+  - `BeginTestTransaction(t *testing.T, db *gorm.DB) *gorm.DB` — start a test transaction (defer rollback).
+
+- HTTP / Gin
+  - `SetupTestRouter() *gin.Engine` — Gin router in test mode with recovery.
+  - `MakeJSONRequest(t *testing.T, router *gin.Engine, method, path string, body interface{}) *httptest.ResponseRecorder` — send JSON request and return recorder.
+  - `MakeAuthenticatedRequest(router *gin.Engine, method, path, token string, body interface{}) *httptest.ResponseRecorder` — like above, with `Authorization` header.
+  - `ParseJSONResponse(t *testing.T, w *httptest.ResponseRecorder, target interface{})` — unmarshal response body.
+  - `AssertJSONResponse(t *testing.T, w *httptest.ResponseRecorder, expectedStatus int, target interface{})` — assert status and parse JSON when applicable.
+  - `AssertErrorResponse(t *testing.T, w *httptest.ResponseRecorder, expectedStatus int, expectedMessageContains string)` — assert error response shape and message.
+  - Context helpers: `CreateTestContext()`, `CreateAuthenticatedTestContext(tenantID, userID uint)`, `SetupAuthContext`, `SetJSONBody`, `SetURLParam`, `SetQueryParam`.
+
+- Fixtures & factories
+  - `CreateTestTenant`, `CreateTestUser`, invoice helpers and small utilities: `GenerateTestEmail`, `Ptr`, `NowPtr`, etc.
+
+- Mocks & fakes
+  - `NewMockLogger()` — a `core.Logger` mock that accepts common calls.
+  - `MockEmailSender` — in-memory email sender that records sent emails (`NewMockEmailSender()`).
+  - Mock PDF, storage and other test doubles live in `mocks.go`.
+  - Simple in-memory repo helpers: `NewMemoryUserRepo()`.
+   - Simple in-memory repo helpers: `NewMemoryUserRepo()`.
+   - Email repo helper: `NewInMemoryEmailRepo()` — returns a test `EmailRepo` suitable for handler/service unit tests.
+
+- Assertions
+  - Time & numeric assertions: `AssertTimeEqual`, `AssertTimeNotZero`, `AssertFloatEqual`, `RequireNoDBError`, plus pointer/slice/map helpers.
+
+Examples
+
+- See the examples in [examples_test.go](examples_test.go) for usage patterns:
+  - unit tests with in-memory repos,
+  - service tests using `SetupTestDB`,
+  - a small handler httptest using `SetupTestRouter`.
+
+Quick run
+
+Run the package tests locally:
+
+```bash
+cd serverbase
+go test ./pkg/testutils -v
+```
+
+Notes
+
+- The helpers are intentionally small and dependency-light so they can be used from other modules in the monorepo.
+- If you need an additional fake or helper, add it here alongside tests so it stays discoverable.
 # Test Utilities Package
 
 This package provides common testing utilities for the AE Backend project.

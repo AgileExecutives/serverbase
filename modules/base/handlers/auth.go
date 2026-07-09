@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/AgileExecutives/serverbase/internal/models"
@@ -14,16 +13,13 @@ import (
 	"github.com/AgileExecutives/serverbase/pkg/auth"
 	"github.com/AgileExecutives/serverbase/pkg/config"
 	"github.com/AgileExecutives/serverbase/pkg/core"
-	"github.com/AgileExecutives/serverbase/pkg/eventbus"
 	"github.com/AgileExecutives/serverbase/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 // AuthHandlers provides authentication related handlers
 type AuthHandlers struct {
-	db             *gorm.DB
 	authService    *userservices.AuthService
 	logger         core.Logger
 	cfg            config.Config
@@ -33,7 +29,6 @@ type AuthHandlers struct {
 // NewAuthHandlers creates new auth handlers using ModuleContext
 func NewAuthHandlers(ctx core.ModuleContext, authSvc *userservices.AuthService, logger core.Logger) *AuthHandlers {
 	return &AuthHandlers{
-		db:          ctx.DB,
 		authService: authSvc,
 		logger:      logger,
 		cfg:         config.Load(),
@@ -64,9 +59,9 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-	// Find user by username or email
-	if err := h.db.Where("username = ? OR email = ?", req.Email, req.Email).First(&user).Error; err != nil {
+	// Find user by username or email via AuthService
+	user, err := h.authService.FindByUsernameOrEmail(c.Request.Context(), req.Email)
+	if err != nil || user == nil {
 		c.JSON(http.StatusUnauthorized, models.ErrorResponseFunc("Invalid credentials", "User not found"))
 		return
 	}
@@ -137,9 +132,13 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 	}
 
 	// Check if username or email already exists
-	var existingUser models.User
-	if err := h.db.Where("username = ? OR email = ?", req.Username, req.Email).First(&existingUser).Error; err == nil {
-		c.JSON(http.StatusConflict, models.ErrorResponseFunc("User already exists", "Username or email already taken"))
+	// Check if username or email already exists via AuthService
+	if existing, _ := h.authService.FindByUsernameOrEmail(c.Request.Context(), req.Username); existing != nil {
+		c.JSON(http.StatusConflict, models.ErrorResponseFunc("User already exists", "Username already taken"))
+		return
+	}
+	if existing, _ := h.authService.FindByEmail(c.Request.Context(), req.Email); existing != nil {
+		c.JSON(http.StatusConflict, models.ErrorResponseFunc("User already exists", "Email already taken"))
 		return
 	}
 
@@ -251,10 +250,7 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 		return
 	}
 
-	// Publish user created event
-	userIDStr := strconv.FormatUint(uint64(user.ID), 10)
-	tenantIDStr := strconv.FormatUint(uint64(user.TenantID), 10)
-	eventbus.PublishUserCreatedAsync(c.Request.Context(), userIDStr, user.Email, tenantIDStr)
+	// Event is published by AuthService.SaveUser for new users; no-op here.
 
 	// Handle newsletter subscription if opted in
 	if req.NewsletterOptIn {
@@ -541,9 +537,9 @@ func (h *AuthHandlers) VerifyEmail(c *gin.Context) {
 		return
 	}
 
-	// Find user by ID and email (both must match)
-	var user models.User
-	if err := h.db.Where("id = ? AND email = ?", userID, email).First(&user).Error; err != nil {
+	// Find user by ID and verify email matches
+	user, err := h.authService.FindByID(c.Request.Context(), uint(userID))
+	if err != nil || user == nil || user.Email != email {
 		c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("User not found", "Invalid verification token"))
 		return
 	}
@@ -559,7 +555,7 @@ func (h *AuthHandlers) VerifyEmail(c *gin.Context) {
 	user.EmailVerified = true
 	user.EmailVerifiedAt = &now
 
-	if err := h.authService.SaveUser(c.Request.Context(), &user); err != nil {
+	if err := h.authService.SaveUser(c.Request.Context(), user); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to verify email", err.Error()))
 		return
 	}
@@ -616,16 +612,9 @@ func (h *AuthHandlers) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	// Check if user exists
-	var user models.User
-	if err := h.db.Where("email = ?", req.Email).First(&user).Error; err != nil {
-		// Don't reveal if email exists or not for security
-		c.JSON(http.StatusOK, models.SuccessResponse("If the email exists, a password reset link has been sent", nil))
-		return
-	}
-
-	// Check if user is active
-	if !user.Active {
+	// Check if user exists via AuthService; don't reveal existence
+	user, _ := h.authService.FindByEmail(c.Request.Context(), req.Email)
+	if user == nil || !user.Active {
 		c.JSON(http.StatusOK, models.SuccessResponse("If the email exists, a password reset link has been sent", nil))
 		return
 	}
@@ -716,14 +705,12 @@ func (h *AuthHandlers) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	// Find user by email
-	var user models.User
-	if err := h.db.Where("email = ?", email).First(&user).Error; err != nil {
+	// Find user by email via AuthService
+	user, err := h.authService.FindByEmail(c.Request.Context(), email)
+	if err != nil || user == nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("User not found", "Invalid reset token"))
 		return
 	}
-
-	// Check if user is active
 	if !user.Active {
 		c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("Account disabled", "User account is not active"))
 		return
@@ -738,7 +725,7 @@ func (h *AuthHandlers) ResetPassword(c *gin.Context) {
 
 	// Update password
 	user.PasswordHash = string(hashedPassword)
-	if err := h.authService.SaveUser(c.Request.Context(), &user); err != nil {
+	if err := h.authService.SaveUser(c.Request.Context(), user); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to update password", err.Error()))
 		return
 	}

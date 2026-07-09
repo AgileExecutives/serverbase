@@ -16,6 +16,8 @@ type InMemoryUserRepo struct {
 	nextID      uint
 	newsletters []*models.Newsletter
 	blacklists  []*models.TokenBlacklist
+	// When true, SaveNewsletter will deduplicate by email instead of appending
+	dedupeNewsletters bool
 }
 
 func NewInMemoryUserRepo() *InMemoryUserRepo {
@@ -36,6 +38,22 @@ func (r *InMemoryUserRepo) FindByEmail(ctx context.Context, email string) (*mode
 	defer r.mu.RUnlock()
 	if u, ok := r.byEmail[email]; ok {
 		return u, nil
+	}
+	return nil, nil
+}
+
+func (r *InMemoryUserRepo) FindByUsernameOrEmail(ctx context.Context, identifier string) (*models.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	// check email map first
+	if u, ok := r.byEmail[identifier]; ok {
+		return u, nil
+	}
+	// fall back to scanning by username
+	for _, u := range r.byID {
+		if u != nil && u.Username == identifier {
+			return u, nil
+		}
 	}
 	return nil, nil
 }
@@ -62,8 +80,30 @@ func (r *InMemoryUserRepo) SaveNewsletter(ctx context.Context, n *models.Newslet
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.newsletters = append(r.newsletters, n)
+	if r.dedupeNewsletters {
+		for i, ex := range r.newsletters {
+			if ex != nil && ex.Email == n.Email {
+				// replace existing entry
+				copy := *n
+				r.newsletters[i] = &copy
+				return nil
+			}
+		}
+		copy := *n
+		r.newsletters = append(r.newsletters, &copy)
+		return nil
+	}
+
+	copy := *n
+	r.newsletters = append(r.newsletters, &copy)
 	return nil
+}
+
+// SetDeduplicateNewsletters enables or disables de-duplication behavior for newsletters
+func (r *InMemoryUserRepo) SetDeduplicateNewsletters(enable bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.dedupeNewsletters = enable
 }
 
 func (r *InMemoryUserRepo) SaveTokenBlacklist(ctx context.Context, tb *models.TokenBlacklist) error {

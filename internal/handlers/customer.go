@@ -4,18 +4,18 @@ import (
 	"net/http"
 
 	"github.com/AgileExecutives/serverbase/internal/models"
+	"github.com/AgileExecutives/serverbase/internal/repo"
 	"github.com/AgileExecutives/serverbase/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type CustomerHandler struct {
-	db *gorm.DB
+	repo repo.CustomerRepo
 }
 
-// NewCustomerHandler creates a new customer handler
-func NewCustomerHandler(db *gorm.DB) *CustomerHandler {
-	return &CustomerHandler{db: db}
+// NewCustomerHandler creates a new customer handler using the provided repo
+func NewCustomerHandler(r repo.CustomerRepo) *CustomerHandler {
+	return &CustomerHandler{repo: r}
 }
 
 // GetCustomers retrieves all customers with pagination and tenant isolation
@@ -45,29 +45,26 @@ func (h *CustomerHandler) GetCustomers(c *gin.Context) {
 	var customers []models.Customer
 	var total int64
 
-	query := h.db.Model(&models.Customer{}).Where("tenant_id = ?", user.TenantID)
-
-	// Filter by active status if provided
+	ctx := c.Request.Context()
+	// use repo to fetch customers
+	var activeFilter *bool
 	if activeStr := c.Query("active"); activeStr != "" {
 		if activeStr == "true" {
-			query = query.Where("active = ?", true)
+			t := true
+			activeFilter = &t
 		} else if activeStr == "false" {
-			query = query.Where("active = ?", false)
+			f := false
+			activeFilter = &f
 		}
 	}
 
-	// Count total records
-	if err := query.Count(&total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to count customers", err.Error()))
-		return
-	}
-
-	// Get paginated results with preloaded relationships
-	// Note: Tenant and Plan relations temporarily disabled due to GORM relation issues
-	if err := query.Offset(offset).Limit(limit).Order("created_at DESC").Find(&customers).Error; err != nil {
+	customers, total, err := h.repo.ListByTenant(ctx, user.TenantID, offset, limit, activeFilter)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to retrieve customers", err.Error()))
 		return
 	}
+
+	// active filtering handled by repo
 
 	// Convert to response format
 	var responses []models.CustomerResponse
@@ -114,17 +111,12 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 		return
 	}
 
-	var customer models.Customer
-	// Note: Plan and Tenant relations temporarily disabled due to GORM relation issues
-	if err := h.db.Where("id = ? AND tenant_id = ?", id, user.TenantID).First(&customer).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, models.ErrorResponseFunc("Customer not found", "Customer with specified ID does not exist"))
-			return
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to retrieve customer", err.Error()))
+	ctx := c.Request.Context()
+	customer, err := h.repo.GetByID(ctx, uint(id), user.TenantID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, models.ErrorResponseFunc("Customer not found", "Customer with specified ID does not exist"))
 		return
 	}
-
 	c.JSON(http.StatusOK, models.SuccessResponse("Customer retrieved successfully", customer.ToResponse()))
 }
 
@@ -158,8 +150,13 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	req.TenantID = user.TenantID
 
 	// Verify the plan exists
-	var plan models.Plan
-	if err := h.db.First(&plan, req.PlanID).Error; err != nil {
+	ctx := c.Request.Context()
+	ok, err := h.repo.PlanExists(ctx, req.PlanID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to verify plan", err.Error()))
+		return
+	}
+	if !ok {
 		c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("Plan not found", "Invalid plan ID"))
 		return
 	}
@@ -181,7 +178,7 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 		Active:        true,
 	}
 
-	if err := h.db.Create(&customer).Error; err != nil {
+	if err := h.repo.Create(c.Request.Context(), &customer); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to create customer", err.Error()))
 		return
 	}
@@ -226,13 +223,10 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 		return
 	}
 
-	var customer models.Customer
-	if err := h.db.Where("id = ? AND tenant_id = ?", id, user.TenantID).First(&customer).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, models.ErrorResponseFunc("Customer not found", "Customer with specified ID does not exist"))
-			return
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to retrieve customer", err.Error()))
+	ctx := c.Request.Context()
+	customer, err := h.repo.GetByID(ctx, uint(id), user.TenantID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, models.ErrorResponseFunc("Customer not found", "Customer with specified ID does not exist"))
 		return
 	}
 
@@ -265,9 +259,12 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 		customer.VAT = req.VAT
 	}
 	if req.PlanID != nil {
-		// Verify the plan exists
-		var plan models.Plan
-		if err := h.db.First(&plan, *req.PlanID).Error; err != nil {
+		ok, err := h.repo.PlanExists(ctx, *req.PlanID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to verify plan", err.Error()))
+			return
+		}
+		if !ok {
 			c.JSON(http.StatusBadRequest, models.ErrorResponseFunc("Plan not found", "Invalid plan ID"))
 			return
 		}
@@ -283,7 +280,7 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 		customer.Active = *req.Active
 	}
 
-	if err := h.db.Save(&customer).Error; err != nil {
+	if err := h.repo.Update(c.Request.Context(), customer); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to update customer", err.Error()))
 		return
 	}
@@ -320,17 +317,13 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 		return
 	}
 
-	var customer models.Customer
-	if err := h.db.Where("id = ? AND tenant_id = ?", id, user.TenantID).First(&customer).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, models.ErrorResponseFunc("Customer not found", "Customer with specified ID does not exist"))
-			return
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to retrieve customer", err.Error()))
+	customer, err := h.repo.GetByID(c.Request.Context(), uint(id), user.TenantID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, models.ErrorResponseFunc("Customer not found", "Customer with specified ID does not exist"))
 		return
 	}
 
-	if err := h.db.Delete(&customer).Error; err != nil {
+	if err := h.repo.Delete(c.Request.Context(), customer); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to delete customer", err.Error()))
 		return
 	}

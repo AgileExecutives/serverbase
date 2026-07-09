@@ -271,27 +271,41 @@ func (app *Application) initializeCoreServices() error {
 
 // runMigrations runs database migrations for all registered module entities
 func (app *Application) runMigrations() error {
-	// Collect entities from all registered modules (including base module)
-	entities := make([]interface{}, 0)
-	moduleCount := 0
-
-	for _, module := range app.registry.GetAll() {
-		moduleEntities := module.Entities()
-		if len(moduleEntities) > 0 {
-			app.logger.Info("Collecting entities from module", "module", module.Name(), "count", len(moduleEntities))
-			for _, entity := range moduleEntities {
-				entities = append(entities, entity.GetModel())
-			}
-			moduleCount++
-		}
+	// Run migrations in dependency order resolved by the ModuleRegistry so
+	// modules that depend on others have their tables created afterward.
+	order, err := app.registry.GetInitializationOrder()
+	if err != nil {
+		return fmt.Errorf("failed to compute module init order: %w", err)
 	}
 
-	if len(entities) > 0 {
-		app.logger.Info("Running migrations", "modules", moduleCount, "entities", len(entities))
-		if err := app.context.DB.AutoMigrate(entities...); err != nil {
-			return fmt.Errorf("failed to migrate entities: %w", err)
+	totalEntities := 0
+	for _, moduleName := range order {
+		mod, ok := app.registry.Get(moduleName)
+		if !ok {
+			continue
 		}
-		app.logger.Info("All entity migrations completed successfully")
+		moduleEntities := mod.Entities()
+		if len(moduleEntities) == 0 {
+			continue
+		}
+		app.logger.Info("Migrating module entities", "module", moduleName, "count", len(moduleEntities))
+		models := make([]interface{}, 0, len(moduleEntities))
+		for _, e := range moduleEntities {
+			if m := e.GetModel(); m != nil {
+				models = append(models, m)
+			}
+		}
+		if len(models) == 0 {
+			continue
+		}
+		if err := app.context.DB.AutoMigrate(models...); err != nil {
+			return fmt.Errorf("failed to migrate entities for module %s: %w", moduleName, err)
+		}
+		totalEntities += len(models)
+	}
+
+	if totalEntities > 0 {
+		app.logger.Info("Entity migrations completed", "modules", len(order), "entities", totalEntities)
 	} else {
 		app.logger.Info("No entities to migrate")
 	}

@@ -15,6 +15,7 @@ import (
 
 	orgdocs "github.com/AgileExecutives/serverbase/internal/organizations/docs"
 	orghandlers "github.com/AgileExecutives/serverbase/internal/organizations/handlers"
+	orgrepo "github.com/AgileExecutives/serverbase/internal/organizations/repo"
 	orgroutes "github.com/AgileExecutives/serverbase/internal/organizations/routes"
 	orgservices "github.com/AgileExecutives/serverbase/internal/organizations/services"
 	"github.com/AgileExecutives/serverbase/pkg/core"
@@ -36,9 +37,11 @@ func (m *OrganizationsModule) Version() string        { return "1.0.0" }
 func (m *OrganizationsModule) Dependencies() []string { return []string{} }
 
 func (m *OrganizationsModule) Initialize(ctx core.ModuleContext) error {
-	svc := orgservices.NewOrganizationService(ctx.DB)
+	// Use GORM-backed repo for persistence and pass it into the service.
+	repo := orgrepo.NewGormOrganizationRepo(ctx.DB)
+	svc := orgservices.NewOrganizationServiceWithRepo(repo)
 	handler := orghandlers.NewOrganizationHandler(svc)
-	m.routeProvider = orgroutes.NewRouteProvider(handler, ctx.DB)
+	m.routeProvider = orgroutes.NewRouteProvider(handler)
 
 	if ctx.DocRegistry != nil {
 		ctx.DocRegistry.RegisterDoc(m.Name(), orgdocs.SwaggerInfoorganizations.ReadDoc())

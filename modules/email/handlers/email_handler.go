@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
+	"github.com/AgileExecutives/serverbase/modules/email/repo"
 	"github.com/AgileExecutives/serverbase/modules/email/services"
 	"github.com/AgileExecutives/serverbase/pkg/config"
 	"github.com/AgileExecutives/serverbase/pkg/core"
 	"github.com/AgileExecutives/serverbase/pkg/middleware"
+
 	"github.com/AgileExecutives/serverbase/pkg/models"
 	"github.com/AgileExecutives/serverbase/pkg/utils"
 	"github.com/gin-gonic/gin"
@@ -14,16 +17,18 @@ import (
 )
 
 type EmailHandler struct {
-	db           *gorm.DB
+	repo         repo.EmailRepo
 	emailService *services.EmailService
 }
 
-func NewEmailHandler(db *gorm.DB, emailService *services.EmailService) *EmailHandler {
-	return &EmailHandler{db: db, emailService: emailService}
+func NewEmailHandler(repo repo.EmailRepo, emailService *services.EmailService) *EmailHandler {
+	return &EmailHandler{repo: repo, emailService: emailService}
 }
 
 func (h *EmailHandler) RegisterRoutes(router *gin.RouterGroup, ctx core.ModuleContext) {
+	authMiddleware := middleware.AuthMiddleware(ctx.DB)
 	emailRoutes := router.Group("/emails")
+	emailRoutes.Use(authMiddleware)
 	{
 		emailRoutes.GET("", h.GetEmails)
 		emailRoutes.GET(":id", h.GetEmail)
@@ -34,7 +39,9 @@ func (h *EmailHandler) RegisterRoutes(router *gin.RouterGroup, ctx core.ModuleCo
 
 func (h *EmailHandler) GetPrefix() string { return "" }
 func (h *EmailHandler) GetMiddleware() []gin.HandlerFunc {
-	return []gin.HandlerFunc{middleware.AuthMiddleware(h.db)}
+	// Middleware requiring DB is not available via the repo abstraction.
+	// Return no middleware here; modules can add auth middleware at routing level if needed.
+	return []gin.HandlerFunc{}
 }
 func (h *EmailHandler) GetSwaggerTags() []string { return []string{"emails"} }
 
@@ -42,20 +49,9 @@ func (h *EmailHandler) GetEmails(c *gin.Context) {
 	page, limit := utils.GetPaginationParams(c)
 	offset := utils.GetOffset(page, limit)
 
-	var emails []models.Email
-	var total int64
-
-	query := h.db.Model(&models.Email{})
-	if status := c.Query("status"); status != "" {
-		query = query.Where("status = ?", status)
-	}
-
-	if err := query.Count(&total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to count emails", err.Error()))
-		return
-	}
-
-	if err := query.Offset(offset).Limit(limit).Order("created_at DESC").Find(&emails).Error; err != nil {
+	status := c.Query("status")
+	emails, total, err := h.repo.List(c.Request.Context(), offset, limit, status)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to retrieve emails", err.Error()))
 		return
 	}
@@ -76,8 +72,8 @@ func (h *EmailHandler) GetEmail(c *gin.Context) {
 		return
 	}
 
-	var email models.Email
-	if err := h.db.First(&email, id).Error; err != nil {
+	email, err := h.repo.FindByID(c.Request.Context(), uint(id))
+	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, models.ErrorResponseFunc("Email not found", "Email with specified ID does not exist"))
 			return
@@ -118,7 +114,7 @@ func (h *EmailHandler) SendEmail(c *gin.Context) {
 	}
 
 	email := models.Email{To: req.To, From: req.From, Subject: req.Subject, Body: req.Body, HTMLBody: req.HTMLBody, Status: "pending"}
-	if err := h.db.Create(&email).Error; err != nil {
+	if err := h.repo.Create(c.Request.Context(), &email); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to create email", err.Error()))
 		return
 	}
@@ -135,7 +131,7 @@ func (h *EmailHandler) SendEmail(c *gin.Context) {
 			status = "failed"
 			errorMessage = err.Error()
 		}
-		h.db.Model(&email).Updates(models.Email{Status: status, ErrorMessage: errorMessage})
+		_ = h.repo.UpdateStatus(context.Background(), email.ID, status, errorMessage)
 	}()
 
 	c.JSON(http.StatusCreated, models.SuccessResponse("Email queued successfully", email.ToResponse()))
@@ -149,11 +145,16 @@ func (h *EmailHandler) GetEmailStats(c *gin.Context) {
 		Delivered int64 `json:"delivered"`
 		Failed    int64 `json:"failed"`
 	}
+	statsMap, err := h.repo.Stats(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponseFunc("Failed to retrieve stats", err.Error()))
+		return
+	}
 	var stats EmailStats
-	h.db.Model(&models.Email{}).Count(&stats.Total)
-	h.db.Model(&models.Email{}).Where("status = ?", "pending").Count(&stats.Pending)
-	h.db.Model(&models.Email{}).Where("status = ?", "sent").Count(&stats.Sent)
-	h.db.Model(&models.Email{}).Where("status = ?", "delivered").Count(&stats.Delivered)
-	h.db.Model(&models.Email{}).Where("status = ?", "failed").Count(&stats.Failed)
+	stats.Total = statsMap["total"]
+	stats.Pending = statsMap["pending"]
+	stats.Sent = statsMap["sent"]
+	stats.Delivered = statsMap["delivered"]
+	stats.Failed = statsMap["failed"]
 	c.JSON(http.StatusOK, models.SuccessResponse("Email statistics retrieved successfully", stats))
 }

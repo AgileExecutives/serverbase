@@ -2,6 +2,7 @@ package repos
 
 import (
 	"github.com/AgileExecutives/serverbase/modules/customers/repo"
+	emailrepo "github.com/AgileExecutives/serverbase/modules/email/repo"
 	tenantrepo "github.com/AgileExecutives/serverbase/modules/tenant/repo"
 	userrepo "github.com/AgileExecutives/serverbase/modules/user/repo"
 	"gorm.io/gorm"
@@ -29,3 +30,4 @@ func (f *GormRepoFactory) NewsletterRepo() userrepo.NewsletterRepo {
 func (f *GormRepoFactory) TokenBlacklistRepo() userrepo.TokenBlacklistRepo {
 	return userrepo.NewGormUserRepo(f.db)
 }
+func (f *GormRepoFactory) EmailRepo() emailrepo.EmailRepo { return emailrepo.NewGormEmailRepo(f.db) }

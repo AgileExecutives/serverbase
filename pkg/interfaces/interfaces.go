@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"time"
+
+	"github.com/AgileExecutives/serverbase/internal/models"
 )
 
 // DB is a narrow abstraction over GORM used by modules for migrations and simple ops.
@@ -28,10 +30,11 @@ type TenantProvider interface {
 }
 
 // UserRepository is a minimal user repository interface used in services.
+// Use concrete model types so module code can rely on well-known structs.
 type UserRepository interface {
-	FindByID(ctx context.Context, id string) (any, error)
-	FindByEmail(ctx context.Context, email string) (any, error)
-	Save(ctx context.Context, entity any) error
+	FindByID(ctx context.Context, id uint) (*models.User, error)
+	FindByEmail(ctx context.Context, email string) (*models.User, error)
+	Save(ctx context.Context, entity *models.User) error
 }
 
 // TimeProvider supplies current time for deterministic tests.

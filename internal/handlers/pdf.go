@@ -1,99 +1,55 @@
 package handlers
 
 import (
-	"net/http"
-
+	"github.com/AgileExecutives/serverbase/pkg/core"
 	pdfServices "github.com/AgileExecutives/shared-modules/pdf/services"
 	"github.com/gin-gonic/gin"
 )
 
-// PdfHandler handles PDF generation requests
-type PdfHandler struct {
-	pdfService *pdfServices.PDFGenerator
+// PdfHandler handles PDF generation requests and delegates to shared service.
+type PdfHandler struct{ pdfService *pdfServices.PDFGenerator }
+
+// NewPDFHandlerWithCtx constructs a PdfHandler using ModuleContext. If the
+// pdf service is registered in ctx.Services it will be used; otherwise a
+// default PDFGenerator is created.
+func NewPDFHandlerWithCtx(ctx core.ModuleContext) *PdfHandler {
+	if ctx.Services != nil {
+		if s, ok := ctx.Services.Get("pdf-generator"); ok {
+			if gen, ok := s.(*pdfServices.PDFGenerator); ok {
+				return &PdfHandler{pdfService: gen}
+			}
+		}
+	}
+	// Fallback: simple default generator (no repo)
+	return &PdfHandler{pdfService: pdfServices.NewPDFGenerator()}
 }
 
-// NewPDFHandler creates a new PDF handler
+// GeneratePDFFromTemplate delegates to the pdf service. Validation is still
+// performed at the handler level to provide proper HTTP responses.
+func (h *PdfHandler) GeneratePDFFromTemplate(c *gin.Context) {
+	type PDFGenerateRequest struct {
+		Data         map[string]interface{} `json:"data"`
+		TemplateName string                 `json:"templateName"`
+		FileName     string                 `json:"fileName"`
+	}
+	var req PDFGenerateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid request body", "details": err.Error()})
+		return
+	}
+	if req.Data == nil || req.TemplateName == "" || req.FileName == "" {
+		c.JSON(400, gin.H{"error": "Missing required fields"})
+		return
+	}
+	name, err := h.pdfService.GeneratePDF(req.Data, req.TemplateName, req.FileName)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to generate PDF", "details": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"success": true, "filename": name})
+}
+
+// Legacy constructor maintained for compatibility
 func NewPDFHandler(pdfService *pdfServices.PDFGenerator) *PdfHandler {
 	return &PdfHandler{pdfService: pdfService}
-}
-
-// PDFGenerateRequest represents the request structure for PDF generation
-type PDFGenerateRequest struct {
-	Data         map[string]interface{} `json:"data"`
-	TemplateName string                 `json:"templateName" example:"report.html"`
-	FileName     string                 `json:"fileName" example:"generated-report"`
-}
-
-// PDFGenerateResponse represents the response structure for successful PDF generation
-type PDFGenerateResponse struct {
-	Success  bool   `json:"success" example:"true"`
-	Message  string `json:"message" example:"PDF generated successfully"`
-	Filename string `json:"filename" example:"generated-report.pdf"`
-}
-
-// ErrorResponse represents an error response
-type ErrorResponse struct {
-	Error   string `json:"error" example:"Template name is required"`
-	Details string `json:"details,omitempty" example:"Additional error details"`
-}
-
-// GeneratePDFFromTemplate generates a PDF from a specified template and data
-// DISABLED-SWAGGER: @Summary Generate PDF from template
-// DISABLED-SWAGGER: @Description Generate a PDF document based on a specified template and data
-// DISABLED-SWAGGER: @Tags pdf
-// DISABLED-SWAGGER: @Accept json
-// DISABLED-SWAGGER: @Produce application/json
-// DISABLED-SWAGGER: @Security BearerAuth
-// DISABLED-SWAGGER: @Param request body PDFGenerateRequest true "PDF generation request"
-// DISABLED-SWAGGER: @Success 200 {object} PDFGenerateResponse "PDF generated successfully"
-// DISABLED-SWAGGER: @Failure 400 {object} ErrorResponse "Invalid request"
-// DISABLED-SWAGGER: @Failure 500 {object} ErrorResponse "Failed to generate PDF"
-// DISABLED-SWAGGER: @Router /api/v1/pdf/create [post]
-func (h *PdfHandler) GeneratePDFFromTemplate(c *gin.Context) {
-	var requestBody PDFGenerateRequest
-
-	if err := c.ShouldBindJSON(&requestBody); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid request body",
-			Details: err.Error(),
-		})
-		return
-	}
-
-	// Validate required fields manually to give specific error messages
-	if requestBody.Data == nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: "Data is required",
-		})
-		return
-	}
-
-	if requestBody.TemplateName == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: "Template name is required",
-		})
-		return
-	}
-
-	if requestBody.FileName == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: "File name is required",
-		})
-		return
-	}
-
-	pdfName, err := h.pdfService.GeneratePDF(requestBody.Data, requestBody.TemplateName, requestBody.FileName)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "Failed to generate PDF",
-			Details: err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, PDFGenerateResponse{
-		Success:  true,
-		Message:  "PDF generated successfully",
-		Filename: pdfName,
-	})
 }
