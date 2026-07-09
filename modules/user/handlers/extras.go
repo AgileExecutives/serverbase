@@ -10,18 +10,19 @@ import (
 	baseRepo "github.com/AgileExecutives/serverbase/modules/base/repo"
 	baseServices "github.com/AgileExecutives/serverbase/modules/base/services"
 	"github.com/AgileExecutives/serverbase/pkg/core"
+	"github.com/AgileExecutives/serverbase/pkg/dbping"
+	"github.com/AgileExecutives/serverbase/pkg/interfaces"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // HealthHandlers provides basic health endpoints
 type HealthHandlers struct {
-	db     *gorm.DB
+	pinger interfaces.DBPinger
 	logger core.Logger
 }
 
 func NewHealthHandlers(ctx core.ModuleContext, logger core.Logger) *HealthHandlers {
-	return &HealthHandlers{db: ctx.DB, logger: logger}
+	return &HealthHandlers{pinger: dbping.NewGormDBPinger(ctx.DB), logger: logger}
 }
 
 // getEnvAsBool gets environment variable as boolean with fallback to default value
@@ -45,9 +46,8 @@ func (h *HealthHandlers) HealthCheck(c *gin.Context) {
 	}
 
 	// Check database connectivity
-	if h.db != nil {
-		sqlDB, err := h.db.DB()
-		if err != nil || sqlDB.Ping() != nil {
+	if h.pinger != nil {
+		if err := h.pinger.Ping(); err != nil {
 			response["database"] = "disconnected"
 			response["status"] = "unhealthy"
 			c.JSON(http.StatusServiceUnavailable, response)

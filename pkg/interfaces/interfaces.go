@@ -63,3 +63,8 @@ type Logger interface {
 	Infof(format string, args ...any)
 	Errorf(format string, args ...any)
 }
+
+// DBPinger abstracts database connectivity checks used by health endpoints.
+type DBPinger interface {
+	Ping() error
+}
