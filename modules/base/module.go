@@ -9,6 +9,7 @@ import (
 
 	internalTenantSvc "github.com/AgileExecutives/serverbase/internal/services"
 	basedocs "github.com/AgileExecutives/serverbase/modules/base/docs"
+	baseRepo "github.com/AgileExecutives/serverbase/modules/base/repo"
 	baseServices "github.com/AgileExecutives/serverbase/modules/base/services"
 	"github.com/AgileExecutives/serverbase/modules/user/entities"
 	"github.com/AgileExecutives/serverbase/modules/user/events"
@@ -73,7 +74,8 @@ func (m *BaseModule) Initialize(ctx core.ModuleContext) error {
 	m.contactHandlers = handlers.NewContactHandlers(ctx, m.contactService, ctx.Logger)
 	m.healthHandlers = handlers.NewHealthHandlers(ctx, ctx.Logger)
 	// Wire user settings service + handlers
-	m.userSettingsService = baseServices.NewUserSettingsService(ctx.DB)
+	// Construct UserSettingsService with a GORM-backed repo
+	m.userSettingsService = baseServices.NewUserSettingsService(baseRepo.NewGormUserSettingsRepo(ctx.DB))
 	m.userSettingsHandlers = handlers.NewUserSettingsHandlers(ctx, ctx.Logger)
 
 	// Initialize event handlers

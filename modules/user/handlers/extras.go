@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/AgileExecutives/serverbase/internal/models"
+	baseRepo "github.com/AgileExecutives/serverbase/modules/base/repo"
 	baseServices "github.com/AgileExecutives/serverbase/modules/base/services"
 	"github.com/AgileExecutives/serverbase/pkg/core"
 	"github.com/gin-gonic/gin"
@@ -77,7 +78,7 @@ type UserSettingsHandlers struct {
 }
 
 func NewUserSettingsHandlers(ctx core.ModuleContext, logger core.Logger) *UserSettingsHandlers {
-	return &UserSettingsHandlers{svc: baseServices.NewUserSettingsService(ctx.DB), logger: logger}
+	return &UserSettingsHandlers{svc: baseServices.NewUserSettingsService(baseRepo.NewGormUserSettingsRepo(ctx.DB)), logger: logger}
 }
 
 func (h *UserSettingsHandlers) GetUserSettings(c *gin.Context) {

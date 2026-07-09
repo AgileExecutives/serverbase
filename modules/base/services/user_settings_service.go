@@ -4,39 +4,37 @@ import (
 	"errors"
 
 	"github.com/AgileExecutives/serverbase/internal/models"
-	"gorm.io/gorm"
+	"github.com/AgileExecutives/serverbase/modules/base/repo"
 )
 
 // UserSettingsService provides operations for user settings
 type UserSettingsService struct {
-	db *gorm.DB
+	repo repo.UserSettingsRepo
 }
 
-// NewUserSettingsService creates a new UserSettingsService
-func NewUserSettingsService(db *gorm.DB) *UserSettingsService {
-	return &UserSettingsService{db: db}
+// NewUserSettingsService creates a new UserSettingsService backed by the given repo
+func NewUserSettingsService(r repo.UserSettingsRepo) *UserSettingsService {
+	return &UserSettingsService{repo: r}
 }
 
 // GetOrCreate returns settings for a user or creates defaults
 func (s *UserSettingsService) GetOrCreate(userID uint) (models.UserSettings, error) {
-	var settings models.UserSettings
-	if err := s.db.Where("user_id = ?", userID).First(&settings).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			settings = models.UserSettings{
-				UserID:   userID,
-				Language: "en",
-				Timezone: "UTC",
-				Theme:    "light",
-				Settings: "{}",
-			}
-			if err := s.db.Create(&settings).Error; err != nil {
-				return models.UserSettings{}, err
-			}
-			return settings, nil
-		}
+	settings, err := s.repo.FindByUserID(userID)
+	if err == nil {
+		return settings, nil
+	}
+	// create defaults
+	defaults := models.UserSettings{
+		UserID:   userID,
+		Language: "en",
+		Timezone: "UTC",
+		Theme:    "light",
+		Settings: "{}",
+	}
+	if err := s.repo.Create(&defaults); err != nil {
 		return models.UserSettings{}, err
 	}
-	return settings, nil
+	return defaults, nil
 }
 
 // Update updates or creates settings for a user based on the request
@@ -59,7 +57,7 @@ func (s *UserSettingsService) Update(userID uint, req models.UserSettingsUpdateR
 		settings.Settings = req.Settings
 	}
 
-	if err := s.db.Save(&settings).Error; err != nil {
+	if err := s.repo.Save(&settings); err != nil {
 		return models.UserSettings{}, err
 	}
 	return settings, nil
@@ -67,23 +65,23 @@ func (s *UserSettingsService) Update(userID uint, req models.UserSettingsUpdateR
 
 // Reset resets settings to defaults for the given user
 func (s *UserSettingsService) Reset(userID uint) (models.UserSettings, error) {
-	var settings models.UserSettings
-	if err := s.db.Where("user_id = ?", userID).First(&settings).Error; err != nil {
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return models.UserSettings{}, err
+	settings, err := s.repo.FindByUserID(userID)
+	if err != nil {
+		// not found — create defaults
+		if !errors.Is(err, errors.New("record not found")) {
+			// unknown error from repo; still attempt to create defaults
 		}
-		// create defaults
-		settings = models.UserSettings{
+		defaults := models.UserSettings{
 			UserID:   userID,
 			Language: "en",
 			Timezone: "UTC",
 			Theme:    "light",
 			Settings: "{}",
 		}
-		if err := s.db.Create(&settings).Error; err != nil {
+		if err := s.repo.Create(&defaults); err != nil {
 			return models.UserSettings{}, err
 		}
-		return settings, nil
+		return defaults, nil
 	}
 
 	settings.Language = "en"
@@ -91,7 +89,7 @@ func (s *UserSettingsService) Reset(userID uint) (models.UserSettings, error) {
 	settings.Theme = "light"
 	settings.Settings = "{}"
 
-	if err := s.db.Save(&settings).Error; err != nil {
+	if err := s.repo.Save(&settings); err != nil {
 		return models.UserSettings{}, err
 	}
 	return settings, nil

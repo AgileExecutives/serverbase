@@ -441,7 +441,6 @@ func (h *AuthHandlers) Me(c *gin.Context) {
 	user := userInterface.(*models.User)
 
 	// Note: Tenant relation temporarily disabled due to GORM relation issues
-	// h.db.Preload("Tenant").First(user, user.ID)
 
 	c.JSON(http.StatusOK, models.SuccessResponse("User retrieved successfully", user.ToResponse()))
 }

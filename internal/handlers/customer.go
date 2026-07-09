@@ -156,7 +156,6 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	}
 
 	// Note: Plan and Tenant relations temporarily disabled due to GORM relation issues
-	// h.db.Preload("Plan").Preload("Tenant").First(&customer, customer.ID)
 
 	c.JSON(http.StatusCreated, models.SuccessResponse("Customer created successfully", customer.ToResponse()))
 }
@@ -246,8 +245,6 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	}
 
 	// Note: Plan and Tenant relations temporarily disabled due to GORM relation issues
-	// h.db.Preload("Plan").Preload("Tenant").First(&customer, customer.ID)
-
 	c.JSON(http.StatusOK, models.SuccessResponse("Customer updated successfully", customer.ToResponse()))
 }
 

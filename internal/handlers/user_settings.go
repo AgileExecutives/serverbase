@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/AgileExecutives/serverbase/internal/models"
+	baseRepo "github.com/AgileExecutives/serverbase/modules/base/repo"
 	baseServices "github.com/AgileExecutives/serverbase/modules/base/services"
 	"github.com/AgileExecutives/serverbase/pkg/core"
 	"github.com/gin-gonic/gin"
@@ -26,8 +27,8 @@ func NewUserSettingsHandlerWithCtx(ctx core.ModuleContext) *UserSettingsHandler 
 			return &UserSettingsHandler{svc: svc}
 		}
 	}
-	// Fallback: construct directly from DB
-	return &UserSettingsHandler{svc: baseServices.NewUserSettingsService(ctx.DB)}
+	// Fallback: construct directly from DB-backed repo
+	return &UserSettingsHandler{svc: baseServices.NewUserSettingsService(baseRepo.NewGormUserSettingsRepo(ctx.DB))}
 }
 
 // GetUserSettings retrieves the current user's settings
