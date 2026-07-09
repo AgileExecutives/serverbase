@@ -8,8 +8,6 @@
 package saas
 
 import (
-	"context"
-
 	"github.com/AgileExecutives/serverbase/module"
 	custrepo "github.com/AgileExecutives/serverbase/modules/customers/repo"
 	"github.com/AgileExecutives/serverbase/pkg/core"
@@ -27,12 +25,6 @@ func NewSaaSModule() core.Module {
 		module.WithRoutes(&customerRouteProvider{}, &planRouteProvider{}),
 	)
 }
-
-type saaSModule struct{}
-
-func (m *saaSModule) Initialize(_ core.ModuleContext) error { return nil }
-func (m *saaSModule) Start(_ context.Context) error         { return nil }
-func (m *saaSModule) Stop(_ context.Context) error          { return nil }
 
 // Note: the route provider implementations remain unchanged and construct
 // services/handlers at RegisterRoutes time so they work with the adapter.

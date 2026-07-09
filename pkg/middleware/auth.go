@@ -12,18 +12,3 @@ import (
 func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 	return internalMiddleware.AuthMiddleware(db)
 }
-
-// RequireRole returns middleware that requires specific user roles
-func RequireRole(db *gorm.DB, roles ...string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// First apply auth middleware
-		internalMiddleware.AuthMiddleware(db)(c)
-		if c.IsAborted() {
-			return
-		}
-
-		// Then check roles
-		// TODO: Implement role checking logic
-		c.Next()
-	}
-}

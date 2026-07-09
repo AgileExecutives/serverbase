@@ -19,17 +19,7 @@ func NewCustomerHandler(r repo.CustomerRepo) *CustomerHandler {
 }
 
 // GetCustomers retrieves all customers with pagination and tenant isolation
-// DISABLED-SWAGGER: @Summary Get all customers
-// DISABLED-SWAGGER: @Description Get a paginated list of customers for the authenticated tenant
-// DISABLED-SWAGGER: @Tags customers
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Security BearerAuth
-// DISABLED-SWAGGER: @Param page query int false "Page number" default(1)
-// DISABLED-SWAGGER: @Param limit query int false "Items per page" default(10)
-// DISABLED-SWAGGER: @Param active query bool false "Filter by active status"
-// DISABLED-SWAGGER: @Success 200 {object} models.APIResponse{data=models.ListResponse}
-// DISABLED-SWAGGER: @Failure 500 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /customers [get]
+// GetCustomers retrieves all customers with pagination and tenant isolation
 func (h *CustomerHandler) GetCustomers(c *gin.Context) {
 	// Get user from context for tenant isolation
 	userInterface, exists := c.Get("user")
@@ -86,16 +76,7 @@ func (h *CustomerHandler) GetCustomers(c *gin.Context) {
 }
 
 // GetCustomer retrieves a specific customer by ID with tenant isolation
-// DISABLED-SWAGGER: @Summary Get customer by ID
-// DISABLED-SWAGGER: @Description Get a specific customer by its ID within the authenticated tenant
-// DISABLED-SWAGGER: @Tags customers
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Security BearerAuth
-// DISABLED-SWAGGER: @Param id path int true "Customer ID"
-// DISABLED-SWAGGER: @Success 200 {object} models.APIResponse{data=models.CustomerResponse}
-// DISABLED-SWAGGER: @Failure 400 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Failure 404 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /customers/{id} [get]
+// GetCustomer retrieves a specific customer by ID with tenant isolation
 func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 	// Get user from context for tenant isolation
 	userInterface, exists := c.Get("user")
@@ -121,16 +102,7 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 }
 
 // CreateCustomer creates a new customer
-// DISABLED-SWAGGER: @Summary Create a new customer
-// DISABLED-SWAGGER: @Description Create a new customer within the authenticated tenant
-// DISABLED-SWAGGER: @Tags customers
-// DISABLED-SWAGGER: @Accept json
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Security BearerAuth
-// DISABLED-SWAGGER: @Param request body models.CustomerCreateRequest true "Customer creation data"
-// DISABLED-SWAGGER: @Success 201 {object} models.APIResponse{data=models.CustomerResponse}
-// DISABLED-SWAGGER: @Failure 400 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /customers [post]
+// CreateCustomer creates a new customer
 func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	// Get user from context for tenant isolation
 	userInterface, exists := c.Get("user")
@@ -190,18 +162,6 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 }
 
 // UpdateCustomer updates an existing customer
-// DISABLED-SWAGGER: @Summary Update a customer
-// DISABLED-SWAGGER: @Description Update an existing customer by ID within the authenticated tenant
-// DISABLED-SWAGGER: @Tags customers
-// DISABLED-SWAGGER: @Accept json
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Security BearerAuth
-// DISABLED-SWAGGER: @Param id path int true "Customer ID"
-// DISABLED-SWAGGER: @Param request body models.CustomerUpdateRequest true "Customer update data"
-// DISABLED-SWAGGER: @Success 200 {object} models.APIResponse{data=models.CustomerResponse}
-// DISABLED-SWAGGER: @Failure 400 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Failure 404 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /customers/{id} [put]
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	// Get user from context for tenant isolation
 	userInterface, exists := c.Get("user")
@@ -292,16 +252,6 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 }
 
 // DeleteCustomer deletes a customer (soft delete)
-// DISABLED-SWAGGER: @Summary Delete a customer
-// DISABLED-SWAGGER: @Description Soft delete a customer by ID within the authenticated tenant
-// DISABLED-SWAGGER: @Tags customers
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Security BearerAuth
-// DISABLED-SWAGGER: @Param id path int true "Customer ID"
-// DISABLED-SWAGGER: @Success 200 {object} models.APIResponse
-// DISABLED-SWAGGER: @Failure 400 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Failure 404 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /customers/{id} [delete]
 func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 	// Get user from context for tenant isolation
 	userInterface, exists := c.Get("user")

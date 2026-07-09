@@ -60,14 +60,7 @@ func GetUserID(c *gin.Context) (uint, error) {
 	return u.ID, nil
 }
 
-// ModuleRouteProvider is a legacy compatibility interface used by older modules
-// that expect a simple route provider with prefix and registration methods.
-type ModuleRouteProvider interface {
-	RegisterRoutes(router *gin.RouterGroup)
-	GetPrefix() string
-	GetMiddleware() []gin.HandlerFunc
-	GetSwaggerTags() []string
-}
+// (Removed) ModuleRouteProvider legacy compatibility interface.
 
 // Helper to write JSON errors
 func JSONError(c *gin.Context, status int, title, detail string) {

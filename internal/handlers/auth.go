@@ -27,16 +27,6 @@ func NewAuthHandler(authSvc *usersvc.AuthService) *AuthHandler {
 }
 
 // Login authenticates a user and returns a JWT token
-// DISABLED-SWAGGER: @Summary Login user
-// DISABLED-SWAGGER: @Description Authenticate user with username/email and password
-// DISABLED-SWAGGER: @Tags auth
-// DISABLED-SWAGGER: @Accept json
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Param request body models.LoginRequest true "Login credentials"
-// DISABLED-SWAGGER: @Success 200 {object} models.APIResponse{data=models.LoginResponse}
-// DISABLED-SWAGGER: @Failure 400 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Failure 401 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -85,16 +75,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 // Logout blacklists the current JWT token
-// DISABLED-SWAGGER: @Summary Logout user
-// DISABLED-SWAGGER: @Description Blacklist the current JWT token
-// DISABLED-SWAGGER: @Tags auth
-// DISABLED-SWAGGER: @Accept json
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Security BearerAuth
-// DISABLED-SWAGGER: @Success 200 {object} models.APIResponse
-// DISABLED-SWAGGER: @Failure 400 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Failure 401 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
 	// Get token from context (set by auth middleware)
 	tokenString, exists := c.Get("token")
@@ -130,17 +110,6 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 }
 
 // Register creates a new user account
-// DISABLED-SWAGGER: @Summary Register new user
-// DISABLED-SWAGGER: @Description Create a new user account. If a user-signup token is provided in Authorization header, user will join that tenant. Otherwise, company_name is required to create new tenant.
-// DISABLED-SWAGGER: @Tags auth
-// DISABLED-SWAGGER: @Accept json
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Param Authorization header string false "Bearer token for user signup invitation"
-// DISABLED-SWAGGER: @Param request body models.UserCreateRequest true "User registration data"
-// DISABLED-SWAGGER: @Success 201 {object} models.APIResponse{data=models.UserResponse}
-// DISABLED-SWAGGER: @Failure 400 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Failure 409 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req models.UserCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -325,17 +294,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 }
 
 // ChangePassword changes the user's password
-// DISABLED-SWAGGER: @Summary Change password
-// DISABLED-SWAGGER: @Description Change user password
-// DISABLED-SWAGGER: @Tags auth
-// DISABLED-SWAGGER: @Accept json
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Security BearerAuth
-// DISABLED-SWAGGER: @Param request body object{current_password=string,new_password=string} true "Password change data"
-// DISABLED-SWAGGER: @Success 200 {object} models.APIResponse
-// DISABLED-SWAGGER: @Failure 400 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Failure 401 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /auth/change-password [post]
 func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	var req struct {
 		CurrentPassword string `json:"current_password" binding:"required"`
@@ -390,15 +348,6 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 }
 
 // Me returns the current user information
-// DISABLED-SWAGGER: @Summary Get current user
-// DISABLED-SWAGGER: @Description Get current authenticated user information
-// DISABLED-SWAGGER: @Tags auth
-// DISABLED-SWAGGER: @Accept json
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Security BearerAuth
-// DISABLED-SWAGGER: @Success 200 {object} models.APIResponse{data=models.UserResponse}
-// DISABLED-SWAGGER: @Failure 401 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /auth/me [get]
 func (h *AuthHandler) Me(c *gin.Context) {
 	// Get user from context
 	userInterface, exists := c.Get("user")
@@ -416,15 +365,6 @@ func (h *AuthHandler) Me(c *gin.Context) {
 }
 
 // ForgotPassword sends a password reset link to the user's email
-// DISABLED-SWAGGER: @Summary Request password reset
-// DISABLED-SWAGGER: @Description Send password reset link to user email
-// DISABLED-SWAGGER: @Tags auth
-// DISABLED-SWAGGER: @Accept json
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Param request body object{email=string} true "User email"
-// DISABLED-SWAGGER: @Success 200 {object} models.APIResponse
-// DISABLED-SWAGGER: @Failure 400 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /auth/forgot-password [post]
 func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	var req struct {
 		Email string `json:"email" binding:"required,email"`
@@ -496,16 +436,6 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 }
 
 // ResetPassword resets the user's password using a reset token
-// DISABLED-SWAGGER: @Summary Reset password
-// DISABLED-SWAGGER: @Description Reset user password with reset token
-// DISABLED-SWAGGER: @Tags auth
-// DISABLED-SWAGGER: @Accept json
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Param token path string true "Reset token"
-// DISABLED-SWAGGER: @Param request body object{new_password=string} true "New password"
-// DISABLED-SWAGGER: @Success 200 {object} models.APIResponse
-// DISABLED-SWAGGER: @Failure 400 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /auth/new-password/{token} [post]
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
@@ -566,28 +496,12 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 }
 
 // GetPasswordSecurity godoc
-// DISABLED-SWAGGER: @Summary Get password security requirements
-// DISABLED-SWAGGER: @Description Returns the current password security requirements including minimum length and character requirements
-// DISABLED-SWAGGER: @Tags auth
-// DISABLED-SWAGGER: @Accept json
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Success 200 {object} utils.PasswordRequirements
-// DISABLED-SWAGGER: @Router /auth/password-security [get]
 func (h *AuthHandler) GetPasswordSecurity(c *gin.Context) {
 	requirements := utils.GetPasswordRequirements()
 	c.JSON(http.StatusOK, requirements)
 }
 
 // VerifyEmail verifies a user's email address using the verification token
-// DISABLED-SWAGGER: @Summary Verify email address
-// DISABLED-SWAGGER: @Description Verify user email address with token from verification email
-// DISABLED-SWAGGER: @Tags auth
-// DISABLED-SWAGGER: @Accept json
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Param token path string true "Verification token"
-// DISABLED-SWAGGER: @Success 200 {object} models.APIResponse
-// DISABLED-SWAGGER: @Failure 400 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /auth/verify-email/{token} [get]
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
@@ -630,17 +544,6 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 }
 
 // GenerateSignupToken generates a signup token for inviting users to a tenant
-// DISABLED-SWAGGER: @Summary Generate user signup token
-// DISABLED-SWAGGER: @Description Generate a token for inviting users to join a specific tenant
-// DISABLED-SWAGGER: @Tags auth
-// DISABLED-SWAGGER: @Accept json
-// DISABLED-SWAGGER: @Produce json
-// DISABLED-SWAGGER: @Security BearerAuth
-// DISABLED-SWAGGER: @Success 200 {object} models.APIResponse{data=object{token=string,expires_in=string}}
-// DISABLED-SWAGGER: @Failure 400 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Failure 401 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Failure 403 {object} models.ErrorResponse
-// DISABLED-SWAGGER: @Router /auth/generate-signup-token [post]
 func (h *AuthHandler) GenerateSignupToken(c *gin.Context) {
 	// Get user from context
 	userInterface, exists := c.Get("user")
