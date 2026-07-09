@@ -6,7 +6,6 @@ import (
 	"github.com/AgileExecutives/serverbase/internal/middleware"
 	"github.com/AgileExecutives/serverbase/internal/models"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // Re-export internal response types for external modules and handlers
@@ -45,11 +44,7 @@ func GetUser(c *gin.Context) (*models.User, error) {
 	return middleware.GetUser(c)
 }
 
-// AuthMiddleware exposes the internal auth middleware for routes that
-// import the api package (convenience wrapper).
-func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
-	return middleware.AuthMiddleware(db)
-}
+// (legacy) AuthMiddleware wrapper removed — use module-provided middleware instead.
 
 // GetUserID retrieves the authenticated user's ID from the context.
 func GetUserID(c *gin.Context) (uint, error) {
