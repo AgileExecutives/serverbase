@@ -1,0 +1,5 @@
+name: saas
+version: 1.0.0
+depends: []
+migrate: true
+docs_path: docs

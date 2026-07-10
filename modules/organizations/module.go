@@ -11,59 +11,52 @@
 package organizations
 
 import (
-	"context"
-
+	"github.com/AgileExecutives/serverbase/module"
 	orgdocs "github.com/AgileExecutives/serverbase/internal/organizations/docs"
 	orghandlers "github.com/AgileExecutives/serverbase/internal/organizations/handlers"
 	orgrepo "github.com/AgileExecutives/serverbase/internal/organizations/repo"
-	orgroutes "github.com/AgileExecutives/serverbase/internal/organizations/routes"
 	orgservices "github.com/AgileExecutives/serverbase/internal/organizations/services"
 	"github.com/AgileExecutives/serverbase/pkg/core"
+	"github.com/gin-gonic/gin"
 )
 
 // OrganizationsModule wires organization CRUD routes and swagger docs into the
 // server module system.
-type OrganizationsModule struct {
-	routeProvider *orgroutes.RouteProvider
-}
-
-// NewOrganizationsModule returns a new OrganizationsModule.
+// NewOrganizationsModule returns a new Organizations module implemented via AdapterModule.
 func NewOrganizationsModule() core.Module {
-	return &OrganizationsModule{}
+	return module.NewAdapterModule("organizations", "1.0.0", []string{},
+		module.WithInit(func(ctx core.ModuleContext) error {
+			if ctx.DocRegistry != nil {
+				ctx.DocRegistry.RegisterDoc("organizations", orgdocs.SwaggerInfoorganizations.ReadDoc())
+			}
+			return nil
+		}),
+		module.WithRoutes(&organizationsRouteProvider{}),
+	)
 }
 
-func (m *OrganizationsModule) Name() string           { return "organizations" }
-func (m *OrganizationsModule) Version() string        { return "1.0.0" }
-func (m *OrganizationsModule) Dependencies() []string { return []string{} }
+// organizationsRouteProvider constructs services/handlers at RegisterRoutes time
+// so they can use the ModuleContext (DB, Auth, Logger).
+type organizationsRouteProvider struct{}
 
-func (m *OrganizationsModule) Initialize(ctx core.ModuleContext) error {
-	// Use GORM-backed repo for persistence and pass it into the service.
+func (r *organizationsRouteProvider) GetPrefix() string                { return "" }
+func (r *organizationsRouteProvider) GetMiddleware() []gin.HandlerFunc { return nil }
+func (r *organizationsRouteProvider) GetSwaggerTags() []string         { return []string{"organizations"} }
+
+func (r *organizationsRouteProvider) RegisterRoutes(router *gin.RouterGroup, ctx core.ModuleContext) {
+	// Construct service using serverbase org repo and wire to handlers
 	repo := orgrepo.NewGormOrganizationRepo(ctx.DB)
 	svc := orgservices.NewOrganizationServiceWithRepo(repo)
-	handler := orghandlers.NewOrganizationHandler(svc)
-	m.routeProvider = orgroutes.NewRouteProvider(handler)
+	h := orghandlers.NewOrganizationHandler(svc)
 
-	if ctx.DocRegistry != nil {
-		ctx.DocRegistry.RegisterDoc(m.Name(), orgdocs.SwaggerInfoorganizations.ReadDoc())
+	organizations := router.Group("/organizations")
+	organizations.Use(ctx.Auth.RequireAuth())
+	{
+		organizations.GET("/supported-formats", h.GetSupportedFormats)
+		organizations.POST("", h.CreateOrganization)
+		organizations.GET("", h.GetAllOrganizations)
+		organizations.GET(":id", h.GetOrganization)
+		organizations.PUT(":id", h.UpdateOrganization)
+		organizations.DELETE(":id", h.DeleteOrganization)
 	}
-	return nil
 }
-
-func (m *OrganizationsModule) Start(_ context.Context) error { return nil }
-func (m *OrganizationsModule) Stop(_ context.Context) error  { return nil }
-
-// Entities returns nothing — the Organization entity is owned by the minimal
-// shared-modules/organization module which registers it separately.
-func (m *OrganizationsModule) Entities() []core.Entity { return nil }
-
-func (m *OrganizationsModule) Routes() []core.RouteProvider {
-	if m.routeProvider == nil {
-		return nil
-	}
-	return []core.RouteProvider{m.routeProvider}
-}
-
-func (m *OrganizationsModule) EventHandlers() []core.EventHandler    { return nil }
-func (m *OrganizationsModule) Services() []core.ServiceProvider      { return nil }
-func (m *OrganizationsModule) Middleware() []core.MiddlewareProvider { return nil }
-func (m *OrganizationsModule) SwaggerPaths() []string                { return nil }
