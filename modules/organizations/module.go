@@ -11,11 +11,11 @@
 package organizations
 
 import (
-	"github.com/AgileExecutives/serverbase/module"
 	orgdocs "github.com/AgileExecutives/serverbase/internal/organizations/docs"
 	orghandlers "github.com/AgileExecutives/serverbase/internal/organizations/handlers"
 	orgrepo "github.com/AgileExecutives/serverbase/internal/organizations/repo"
 	orgservices "github.com/AgileExecutives/serverbase/internal/organizations/services"
+	"github.com/AgileExecutives/serverbase/module"
 	"github.com/AgileExecutives/serverbase/pkg/core"
 	"github.com/gin-gonic/gin"
 )
